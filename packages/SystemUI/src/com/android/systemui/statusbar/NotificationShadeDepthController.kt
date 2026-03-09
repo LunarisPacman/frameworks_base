@@ -20,6 +20,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.WindowConfiguration
+import android.hardware.power.Boost
+import android.os.PowerManagerInternal
 import android.os.SystemClock
 import android.util.IndentingPrintWriter
 import android.util.Log
@@ -34,6 +36,7 @@ import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
 import com.android.app.animation.Interpolators
 import com.android.app.tracing.coroutines.TrackTracer
+import com.android.server.LocalServices
 import com.android.systemui.Dumpable
 import com.android.systemui.Flags
 import com.android.systemui.Flags.checkDesktopModeForSpacialModelAppPushback
@@ -368,10 +371,20 @@ constructor(
         }
 
     private fun onBlurApplied(appliedBlurRadius: Int, zoomOutFromShadeRadius: Float) {
+        val wasBlurred = lastAppliedBlur > 0
         lastAppliedBlur = appliedBlurRadius
         onZoomOutChanged(zoomOutFromShadeRadius)
         listeners.forEach { it.onBlurRadiusChanged(appliedBlurRadius) }
         notificationShadeWindowController.setBackgroundBlurRadius(appliedBlurRadius)
+
+        if (!wasBlurred && appliedBlurRadius > 0) {
+            boostInteraction()
+        }
+    }
+
+    private fun boostInteraction() {
+        val pmi = LocalServices.getService(PowerManagerInternal::class.java)
+        pmi?.setPowerBoost(Boost.INTERACTION, 500)
     }
 
     private fun onZoomOutChanged(zoomOutFromShadeRadius: Float) {
