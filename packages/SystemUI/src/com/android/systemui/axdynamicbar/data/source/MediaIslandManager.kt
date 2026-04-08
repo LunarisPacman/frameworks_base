@@ -36,6 +36,8 @@ constructor(
 ) {
     companion object {
         private const val TAG = "MediaIslandManager"
+
+        private const val UNKNOWN_DURATION = 0L
     }
 
     private val _mediaEvent = MutableStateFlow<IslandEvent.Media?>(null)
@@ -118,22 +120,31 @@ constructor(
             state.state == PlaybackState.STATE_FAST_FORWARDING ||
             state.state == PlaybackState.STATE_REWINDING
 
-    private fun computeAccuratePosition(state: PlaybackState): Long {
+    private fun computeAccuratePosition(state: PlaybackState, duration: Long): Long {
+        val safeDuration = if (duration > 0L) duration else Long.MAX_VALUE
         val basePos = state.position.coerceAtLeast(0L)
-        if (!isInMotion(state)) return basePos
+        if (!isInMotion(state)) return basePos.coerceAtMost(safeDuration)
         val updateTime = state.lastPositionUpdateTime
-        if (updateTime <= 0) return basePos
+        if (updateTime <= 0) return basePos.coerceAtMost(safeDuration)
         val elapsed = SystemClock.elapsedRealtime() - updateTime
         val speed = state.playbackSpeed.takeIf { it > 0f } ?: 1f
-        val duration = _mediaEvent.value?.duration ?: Long.MAX_VALUE
-        return (basePos + (elapsed * speed).toLong()).coerceIn(0L, duration)
+        val interpolated = basePos + (elapsed * speed).toLong()
+        return if (duration > 0L) {
+            interpolated.coerceIn(0L, duration)
+        } else {
+            interpolated.coerceAtLeast(0L)
+        }
     }
 
     private fun updatePosition(state: PlaybackState) {
         val current = _mediaEvent.value ?: return
-        val duration = current.duration.takeIf { it > 0L } ?: return
-        val posMs = computeAccuratePosition(state)
-        val progress = (posMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+        val duration = current.duration.takeIf { it > 0L }
+        val posMs = computeAccuratePosition(state, current.duration)
+        val progress = if (duration != null) {
+            (posMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
         val speed = state.playbackSpeed.takeIf { it > 0f } ?: 1f
         _mediaEvent.value = current.copy(
             position = posMs,
@@ -162,8 +173,9 @@ constructor(
                         ?: metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
                         ?: ""
                 val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
-                val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-                
+                val rawDuration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+                val duration = if (rawDuration > 0L) rawDuration else UNKNOWN_DURATION
+
                 val albumArt = sessionAlbumArt ?: run {
                     val bmp = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                         ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
@@ -173,7 +185,7 @@ constructor(
                 val controller = getActiveController()
                 val ps = controller?.playbackState
                 val existingPos = _mediaEvent.value?.position ?: 0L
-                val posMs = if (ps != null) computeAccuratePosition(ps) else existingPos
+                val posMs = if (ps != null) computeAccuratePosition(ps, duration) else existingPos
                 val progress =
                     if (duration > 0L) (posMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                     else 0f
@@ -220,6 +232,7 @@ constructor(
                                 isPlaying = false,
                                 albumArt = albumArt ?: current.albumArt,
                                 progress = progress,
+                                duration = duration.takeIf { it > 0L } ?: current.duration,
                                 position = posMs,
                                 playbackSpeed = speed,
                                 positionUpdateTime = updateTime,
