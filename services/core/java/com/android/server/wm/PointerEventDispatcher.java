@@ -38,7 +38,7 @@ public class PointerEventDispatcher extends InputEventReceiver {
     @Override
     public void onInputEvent(InputEvent event) {
         try {
-            AxRefreshRateController.get().onPointerEvent();
+            AxRefreshRateController.getInstance().onPointerEvent();
             if (event instanceof MotionEvent
                     && (event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0) {
                 MotionEvent motionEvent = (MotionEvent) event;
