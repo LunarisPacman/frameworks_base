@@ -305,4 +305,7 @@
     <!-- Essential Notifications -->
     <string name="essential_notifications_title">Essentials</string>
     <string name="essential_notifications_summary">Important messages and alerts</string>
+
+    <!-- Screenshot -->
+    <string name="quick_settings_screenshot_label">Screenshot</string>
 </resources>
