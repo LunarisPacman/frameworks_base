@@ -240,6 +240,7 @@ public class UdfpsController implements DozeReceiver, Dumpable {
     private boolean mOnFingerDown;
     private boolean mAttemptedToDismissKeyguard;
     private final Set<Callback> mCallbacks = new HashSet<>();
+    private boolean mUseMtkGhbmDimming;
 
     private UdfpsAnimation mUdfpsAnimation;
     private boolean mKeyguardCallbackRegistered = false;
@@ -882,6 +883,8 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             mWakefulnessLifecycle.addObserver(mWakefulnessLifecycleObserver);
         }
 
+        mUseMtkGhbmDimming = mContext.getResources().getBoolean(
+                com.android.systemui.res.R.bool.config_udfpsMtkGhbmDimming);
         mDisableSmartPixels = mContext.getResources().getBoolean(com.android.systemui.res.R.bool.config_disableSmartPixelsOnUDFPS);
 
         if (com.android.internal.util.lunaris.Utils.isPackageInstalled(mContext,
@@ -1035,6 +1038,12 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             final View oldView = mOverlay.getTouchOverlay();
             if (oldView != null) {
                 onFingerUp(mOverlay.getRequestId(), oldView);
+            }
+            if (mUseMtkGhbmDimming) {
+                final View hbmView = mOverlay.getHbmView();
+                if (hbmView != null) {
+                    hbmView.setVisibility(View.GONE);
+                }
             }
             final boolean removed = mOverlay.hide();
             mKeyguardViewManager.hideAlternateBouncer(true);
@@ -1268,6 +1277,30 @@ public class UdfpsController implements DozeReceiver, Dumpable {
         mOnFingerDown = true;
         mFingerprintManager.onPointerDown(requestId, mSensorProps.sensorId, pointerId, x, y,
                 minor, major, orientation, time, gestureStart, isAod);
+
+        if (mUseMtkGhbmDimming && mOverlay != null) {
+            final View hbmView = mOverlay.getHbmView();
+            final WindowManager.LayoutParams hbmParams = mOverlay.getHbmLayoutParamsFull();
+            if (hbmView != null && hbmParams != null) {
+                final MtkUdfpsScrimController mtkController =
+                        MtkUdfpsScrimController.getInstance(mContext);
+                final int brightness = mtkController.getSystemBrightness();
+                final float alpha = mtkController.calculateAlpha(brightness);
+
+                Log.d(TAG, "UDFPS Scrim: Brightness=" + brightness
+                        + " CalculatedAlpha=" + alpha);
+
+                if (hbmView.getVisibility() != View.VISIBLE) {
+                    hbmView.setVisibility(View.VISIBLE);
+                }
+
+                if (Math.abs(hbmParams.alpha - alpha) > 0.001f) {
+                    hbmParams.alpha = alpha;
+                    mWindowManager.updateViewLayout(hbmView, hbmParams);
+                }
+            }
+        }
+
         Trace.endAsyncSection("UdfpsController.e2e.onPointerDown", 0);
 
         final View view = mOverlay.getTouchOverlay();
@@ -1336,6 +1369,13 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             hideUdfpsAnimation();
         }
         mOnFingerDown = false;
+
+        if (mUseMtkGhbmDimming && mOverlay != null) {
+            final View hbmView = mOverlay.getHbmView();
+            if (hbmView != null) {
+                hbmView.setVisibility(View.GONE);
+            }
+        }
         unconfigureDisplay(view);
         cancelAodSendFingerUpAction();
     }
