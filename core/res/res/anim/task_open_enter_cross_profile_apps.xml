@@ -23,20 +23,20 @@
      android:hasRoundedCorners="true">
 
     <translate
-        android:fromXDelta="105%"
+        android:fromXDelta="12%"
         android:toXDelta="0"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_decelerate"
         android:startOffset="0"
-        android:duration="500"/>
+        android:duration="417"/>
 
     <!-- To keep the transition around longer for the thumbnail, should be kept in sync with
          cross_profile_apps_thumbmail.xml -->
     <alpha
         android:fromAlpha="1.0"
         android:toAlpha="1.0"
-        android:startOffset="717"
-        android:duration="200"/>
+        android:startOffset="597"
+        android:duration="180"/>
 </set>

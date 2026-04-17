@@ -22,13 +22,36 @@
      android:zAdjustment="top"
      android:hasRoundedCorners="true">
 
+    <alpha
+        android:fromAlpha="0"
+        android:toAlpha="1.0"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/linear_out_slow_in"
+        android:startOffset="10"
+        android:duration="120"/>
+
+    <scale
+        android:fromXScale="0.985"
+        android:toXScale="1.0"
+        android:fromYScale="0.985"
+        android:toYScale="1.0"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/emphasized_decelerate"
+        android:duration="417"/>
+
     <translate
-        android:fromXDelta="105%"
+        android:fromXDelta="12%"
         android:toXDelta="0"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_decelerate"
         android:startOffset="0"
-        android:duration="500"/>
+        android:duration="417"/>
 </set>
