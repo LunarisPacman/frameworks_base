@@ -172,8 +172,13 @@ constructor(
                     }
                 }
 
+                val removedPromoted = _promotedOngoingEvents.value.filter { it.sbn.key == sbn.key }
                 _promotedOngoingEvents.value =
                     _promotedOngoingEvents.value.filter { it.sbn.key != sbn.key }
+
+                if (removedPromoted.isNotEmpty()) {
+                    removedPromoted.forEach { onEventCompleted?.invoke(it.sbn.key) }
+                }
 
                 _sportsEvents.value =
                     _sportsEvents.value.filter { it.key != sbn.key }
