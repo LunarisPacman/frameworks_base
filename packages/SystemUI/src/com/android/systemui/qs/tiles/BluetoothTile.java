@@ -26,6 +26,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.HandlerExecutor;
 import android.os.Looper;
@@ -224,6 +225,7 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
         }
         state.dualTarget = true;
         state.value = enabled;
+        state.sideViewCustomDrawable = null;
         state.label = mContext.getString(R.string.quick_settings_bluetooth_label);
         state.secondaryLabel = TextUtils.emptyIfNull(
                 getSecondaryLabel(enabled, connecting, connected,
@@ -235,6 +237,10 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
         if (enabled) {
             if (connected) {
                 state.icon = maybeLoadResourceIcon(R.drawable.qs_bluetooth_icon_on);
+                final List<CachedBluetoothDevice> connectedDevices = mController.getConnectedDevices();
+                if (!connectedDevices.isEmpty()) {
+                    state.sideViewCustomDrawable = getConnectedDeviceTileDrawable(connectedDevices);
+                }
                 if (!TextUtils.isEmpty(mController.getConnectedDeviceName())) {
                     state.label = mController.getConnectedDeviceName();
                 }
@@ -258,6 +264,37 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
 
         state.expandedAccessibilityClassName = Button.class.getName();
         state.forceExpandIcon = mFeatureFlags.isEnabled(Flags.BLUETOOTH_QS_TILE_DIALOG);
+    }
+
+    @Nullable
+    private Drawable getConnectedDeviceTileDrawable(List<CachedBluetoothDevice> connectedDevices) {
+        if (connectedDevices.size() != 1) {
+            return null;
+        }
+
+        CachedBluetoothDevice device = connectedDevices.get(0);
+        if (!isSupportedAudioDevice(device)) {
+            return null;
+        }
+
+        BluetoothDevice bluetoothDevice = device.getDevice();
+        if (bluetoothDevice == null || !BluetoothUtils.isAdvancedDetailsHeader(bluetoothDevice)) {
+            return null;
+        }
+
+        Drawable drawable = BluetoothUtils.getBtDrawableWithDescription(mContext, device).first;
+        if (drawable == null) {
+            return null;
+        }
+
+        return BluetoothUtils.buildAdvancedDrawable(mContext, drawable.mutate());
+    }
+
+    private boolean isSupportedAudioDevice(CachedBluetoothDevice device) {
+        return device.isConnectedA2dpDevice()
+                || device.isConnectedHfpDevice()
+                || device.isConnectedLeAudioDevice()
+                || device.isConnectedHearingAidDevice();
     }
 
     private void toggleBluetooth() {

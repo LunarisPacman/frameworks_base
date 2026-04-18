@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice
 import android.os.Handler
 import android.os.Looper
 import android.os.UserManager
+import android.util.Pair
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
 import android.platform.test.annotations.RequiresFlagsDisabled
@@ -19,6 +20,7 @@ import com.android.dx.mockito.inline.extended.ExtendedMockito
 import com.android.internal.logging.MetricsLogger
 import com.android.settingslib.Utils
 import com.android.settingslib.bluetooth.BatteryLevelsInfo
+import com.android.settingslib.bluetooth.BluetoothUtils
 import com.android.settingslib.bluetooth.CachedBluetoothDevice
 import com.android.settingslib.flags.Flags.FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY
 import com.android.settingslib.satellite.SatelliteDialogUtils
@@ -254,6 +256,65 @@ class BluetoothTileTest : SysuiTestCase() {
         tile.handleUpdateState(state, /* arg= */ null)
 
         assertThat(state.secondaryLabel).isEqualTo("")
+    }
+
+    @Test
+    fun testSideViewDrawable_whenSingleAdvancedAudioDeviceConnected_isShown() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        val btDevice = mock<BluetoothDevice>()
+        val deviceDrawable = mContext.getDrawable(R.drawable.ic_earbuds_advanced)!!
+        whenever(cachedDevice.device).thenReturn(btDevice)
+        whenever(cachedDevice.isConnectedA2dpDevice).thenReturn(true)
+        enableBluetooth()
+        setBluetoothConnected()
+        addConnectedDevice(cachedDevice)
+
+        val mockitoSession =
+            ExtendedMockito.mockitoSession()
+                .mockStatic(BluetoothUtils::class.java)
+                .startMocking()
+
+        try {
+            whenever(BluetoothUtils.isAdvancedDetailsHeader(btDevice)).thenReturn(true)
+            whenever(BluetoothUtils.getBtDrawableWithDescription(mContext, cachedDevice))
+                .thenReturn(Pair(deviceDrawable, ""))
+            whenever(BluetoothUtils.buildAdvancedDrawable(mContext, deviceDrawable))
+                .thenReturn(deviceDrawable)
+
+            tile.handleUpdateState(state, /* arg= */ null)
+
+            assertThat(state.sideViewCustomDrawable).isEqualTo(deviceDrawable)
+        } finally {
+            mockitoSession.finishMocking()
+        }
+    }
+
+    @Test
+    fun testSideViewDrawable_whenConnectedDeviceHasNoAdvancedArtwork_isHidden() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        val btDevice = mock<BluetoothDevice>()
+        whenever(cachedDevice.device).thenReturn(btDevice)
+        whenever(cachedDevice.isConnectedA2dpDevice).thenReturn(true)
+        enableBluetooth()
+        setBluetoothConnected()
+        addConnectedDevice(cachedDevice)
+
+        val mockitoSession =
+            ExtendedMockito.mockitoSession()
+                .mockStatic(BluetoothUtils::class.java)
+                .startMocking()
+
+        try {
+            whenever(BluetoothUtils.isAdvancedDetailsHeader(btDevice)).thenReturn(false)
+
+            tile.handleUpdateState(state, /* arg= */ null)
+
+            assertThat(state.sideViewCustomDrawable).isNull()
+        } finally {
+            mockitoSession.finishMocking()
+        }
     }
 
     @Test
