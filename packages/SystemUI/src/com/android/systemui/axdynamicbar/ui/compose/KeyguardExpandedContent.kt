@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -245,7 +244,20 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
         null
     }
 
-    KeyguardPanelSurface {
+    Box(
+        modifier = Modifier
+            .widthIn(max = 360.dp)
+            .fillMaxWidth()
+            .padding(horizontal = SpaceSection)
+            .clip(ShapeCard)
+            .background(KeyguardMediaControlBg)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCard)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {},
+            ),
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
@@ -256,18 +268,18 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
                     Image(
                         bitmap = art.toScaledBitmap(360.dp),
                         contentDescription = null,
-                        modifier = Modifier.matchParentSize(),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
                 } ?: Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .fillMaxSize()
                         .background(colors.surfaceTint),
                 )
 
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
                                 0f to Color.Black.copy(alpha = 0.18f),

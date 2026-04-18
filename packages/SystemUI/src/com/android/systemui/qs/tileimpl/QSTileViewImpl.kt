@@ -290,8 +290,9 @@ constructor(
         }
 
         val endMargin = resources.getDimensionPixelSize(R.dimen.qs_drawable_end_margin)
+        val sideViewSize = resources.getDimensionPixelSize(R.dimen.qs_side_view_size)
         (customDrawableView.layoutParams as MarginLayoutParams).apply {
-            height = iconSize
+            height = sideViewSize
             marginEnd = endMargin
         }
 
