@@ -250,6 +250,8 @@ private fun ensureContrast(color: Color): Color {
 
 @Composable
 internal fun chipAccentColorFor(event: IslandEvent): Color {
+    val isDark = isSystemInDarkTheme()
+
     if (event is IslandEvent.Media && event.mediaColor != 0) {
         return darkenColor(Color(event.mediaColor))
     }
@@ -260,8 +262,15 @@ internal fun chipAccentColorFor(event: IslandEvent): Color {
             if (color != null) return color
         }
     }
-    if (event is IslandEvent.Notification && event.appIcon != null) {
-        val isDark = isSystemInDarkTheme()
+    if (event is IslandEvent.Notification
+        && (event.progress >= 0 || event.isProgressIndeterminate)
+        && event.appIcon != null) {
+        val color = rememberPaletteColor(event.appIcon!!)
+        if (color != null) return ensureContrast(color, isDark)
+    }
+    if (event is IslandEvent.PromotedOngoing
+        && (event.progress >= 0f || event.isIndeterminate)
+        && event.appIcon != null) {
         val color = rememberPaletteColor(event.appIcon!!)
         if (color != null) return ensureContrast(color, isDark)
     }
@@ -552,4 +561,3 @@ internal fun PendingIntent.sendWithBal(context: Context, fillIntent: Intent? = n
     )
     send(context, 0, fillIntent, null, null, null, options.toBundle())
 }
-
