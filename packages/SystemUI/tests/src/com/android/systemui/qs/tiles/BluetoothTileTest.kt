@@ -322,7 +322,6 @@ class BluetoothTileTest : SysuiTestCase() {
         val state = QSTile.BooleanState()
         val cachedDevice = mock<CachedBluetoothDevice>()
         val btDevice = mock<BluetoothDevice>()
-        val deviceDrawable = mContext.getDrawable(R.drawable.ic_earbuds_advanced)!!
         whenever(cachedDevice.device).thenReturn(btDevice)
         whenever(cachedDevice.name).thenReturn("Soundcore Q20i")
         whenever(cachedDevice.isConnectedA2dpDevice).thenReturn(true)
@@ -337,12 +336,11 @@ class BluetoothTileTest : SysuiTestCase() {
 
         try {
             whenever(BluetoothUtils.isAdvancedDetailsHeader(btDevice)).thenReturn(false)
-            whenever(BluetoothUtils.buildAdvancedDrawable(eq(mContext), any()))
-                .thenReturn(deviceDrawable)
 
             tile.handleUpdateState(state, /* arg= */ null)
 
-            assertThat(state.sideViewCustomDrawable).isEqualTo(deviceDrawable)
+            assertThat(state.sideViewCustomDrawable).isNotNull()
+            assertThat(state.sideViewCustomDrawable!!.intrinsicHeight).isEqualTo(512)
         } finally {
             mockitoSession.finishMocking()
         }

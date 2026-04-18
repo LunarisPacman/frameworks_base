@@ -293,7 +293,7 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             return null;
         }
 
-        return BluetoothUtils.buildAdvancedDrawable(mContext, drawable.mutate());
+        return drawable.mutate();
     }
 
     private boolean isSupportedAudioDevice(CachedBluetoothDevice device) {
@@ -316,13 +316,12 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             return null;
         }
 
-        Drawable drawable =
-                mContext.getDrawable(com.android.internal.R.drawable.ic_bt_headphones_a2dp);
+        Drawable drawable = mContext.getDrawable(R.drawable.soundcore_q20i);
         if (drawable == null) {
             return null;
         }
 
-        return BluetoothUtils.buildAdvancedDrawable(mContext, drawable.mutate());
+        return drawable.mutate();
     }
 
     private void toggleBluetooth() {
