@@ -393,11 +393,7 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
                     batteryLevel = batteryLevelsInfo.getOverallBatteryLevel();
                     registerBatteryChangedCallback(device);
                     if (leftBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
-                            && rightBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
-                            && (device.isConnectedHearingAidDevice()
-                                    || BluetoothUtils.getBooleanMetaData(
-                                            device.getDevice(),
-                                            BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET))) {
+                            && rightBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
                         return mContext.getString(
                                 com.android.settingslib.R.string
                                         .bluetooth_battery_level_untethered_left_right,

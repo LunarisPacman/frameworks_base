@@ -255,7 +255,6 @@ class BluetoothTileTest : SysuiTestCase() {
         whenever(cachedDevice.device).thenReturn(btDevice)
         whenever(cachedDevice.batteryLevelsInfo)
             .thenReturn(BatteryLevelsInfo(41, 58, -1, 50))
-        whenever(cachedDevice.isConnectedHearingAidDevice).thenReturn(true)
         enableBluetooth()
         setBluetoothConnected()
         addConnectedDevice(cachedDevice)
