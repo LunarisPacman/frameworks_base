@@ -318,6 +318,37 @@ class BluetoothTileTest : SysuiTestCase() {
     }
 
     @Test
+    fun testSideViewDrawable_whenConnectedDeviceIsSoundcoreQ20i_usesNamedFallback() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        val btDevice = mock<BluetoothDevice>()
+        val deviceDrawable = mContext.getDrawable(R.drawable.ic_earbuds_advanced)!!
+        whenever(cachedDevice.device).thenReturn(btDevice)
+        whenever(cachedDevice.name).thenReturn("Soundcore Q20i")
+        whenever(cachedDevice.isConnectedA2dpDevice).thenReturn(true)
+        enableBluetooth()
+        setBluetoothConnected()
+        addConnectedDevice(cachedDevice)
+
+        val mockitoSession =
+            ExtendedMockito.mockitoSession()
+                .mockStatic(BluetoothUtils::class.java)
+                .startMocking()
+
+        try {
+            whenever(BluetoothUtils.isAdvancedDetailsHeader(btDevice)).thenReturn(false)
+            whenever(BluetoothUtils.buildAdvancedDrawable(eq(mContext), any()))
+                .thenReturn(deviceDrawable)
+
+            tile.handleUpdateState(state, /* arg= */ null)
+
+            assertThat(state.sideViewCustomDrawable).isEqualTo(deviceDrawable)
+        } finally {
+            mockitoSession.finishMocking()
+        }
+    }
+
+    @Test
     @DisableFlags(QsDetailedView.FLAG_NAME)
     fun handleClick_hasSatelliteFeatureButNoQsTileDialogAndClickIsProcessing_doNothing() {
         `when`(featureFlags.isEnabled(com.android.systemui.flags.Flags.BLUETOOTH_QS_TILE_DIALOG))

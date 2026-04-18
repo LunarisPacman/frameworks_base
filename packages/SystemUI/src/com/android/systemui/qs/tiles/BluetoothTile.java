@@ -70,6 +70,7 @@ import dagger.Lazy;
 import kotlinx.coroutines.Job;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
@@ -83,6 +84,7 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
     private static final Intent BLUETOOTH_SETTINGS = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
 
     private static final String TAG = BluetoothTile.class.getSimpleName();
+    private static final String SOUNCORE_Q20I_NAME = "soundcore q20i";
 
     private final BluetoothController mController;
 
@@ -278,8 +280,12 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
         }
 
         BluetoothDevice bluetoothDevice = device.getDevice();
-        if (bluetoothDevice == null || !BluetoothUtils.isAdvancedDetailsHeader(bluetoothDevice)) {
+        if (bluetoothDevice == null) {
             return null;
+        }
+
+        if (!BluetoothUtils.isAdvancedDetailsHeader(bluetoothDevice)) {
+            return getNamedFallbackDeviceTileDrawable(device);
         }
 
         Drawable drawable = BluetoothUtils.getBtDrawableWithDescription(mContext, device).first;
@@ -295,6 +301,28 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
                 || device.isConnectedHfpDevice()
                 || device.isConnectedLeAudioDevice()
                 || device.isConnectedHearingAidDevice();
+    }
+
+    @Nullable
+    private Drawable getNamedFallbackDeviceTileDrawable(CachedBluetoothDevice device) {
+        String deviceName = device.getName();
+        if (TextUtils.isEmpty(deviceName)) {
+            return null;
+        }
+
+        String normalizedDeviceName = deviceName.toLowerCase(Locale.ROOT);
+        if (!normalizedDeviceName.contains(SOUNCORE_Q20I_NAME)
+                && !normalizedDeviceName.contains("q20i")) {
+            return null;
+        }
+
+        Drawable drawable =
+                mContext.getDrawable(com.android.internal.R.drawable.ic_bt_headphones_a2dp);
+        if (drawable == null) {
+            return null;
+        }
+
+        return BluetoothUtils.buildAdvancedDrawable(mContext, drawable.mutate());
     }
 
     private void toggleBluetooth() {
