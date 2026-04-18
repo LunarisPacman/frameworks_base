@@ -242,8 +242,35 @@ class BluetoothTileTest : SysuiTestCase() {
                     R.string.quick_settings_bluetooth_secondary_label_battery_level,
                     Utils.formatPercentage(50),
                 )
-            )
+        )
         verify(cachedDevice).registerCallback(any(), any())
+    }
+
+    @Test
+    @EnableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
+    fun testSecondaryLabel_whenBatteryLevelsInfoHasLeftAndRight_showLeftRightBattery() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        val btDevice = mock<BluetoothDevice>()
+        whenever(cachedDevice.device).thenReturn(btDevice)
+        whenever(cachedDevice.batteryLevelsInfo)
+            .thenReturn(BatteryLevelsInfo(41, 58, -1, 50))
+        whenever(cachedDevice.isConnectedHearingAidDevice).thenReturn(true)
+        enableBluetooth()
+        setBluetoothConnected()
+        addConnectedDevice(cachedDevice)
+
+        tile.handleUpdateState(state, /* arg= */ null)
+
+        assertThat(state.secondaryLabel)
+            .isEqualTo(
+                mContext.getString(
+                    com.android.settingslib.R.string
+                        .bluetooth_battery_level_untethered_left_right,
+                    Utils.formatPercentage(41),
+                    Utils.formatPercentage(58),
+                )
+            )
     }
 
     @Test
@@ -340,7 +367,9 @@ class BluetoothTileTest : SysuiTestCase() {
             tile.handleUpdateState(state, /* arg= */ null)
 
             assertThat(state.sideViewCustomDrawable).isNotNull()
-            assertThat(state.sideViewCustomDrawable!!.intrinsicHeight).isEqualTo(512)
+            assertThat(state.sideViewCustomDrawable!!.intrinsicHeight).isAtMost(
+                mContext.resources.getDimensionPixelSize(R.dimen.qs_icon_size)
+            )
         } finally {
             mockitoSession.finishMocking()
         }

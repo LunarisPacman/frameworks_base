@@ -17,7 +17,9 @@
 package com.android.systemui.bluetooth.qsdialog
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -71,6 +73,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 data class DeviceItemClick(val deviceItem: DeviceItem, val clickedView: View, val target: Target) {
     enum class Target {
@@ -625,7 +628,7 @@ constructor(
                     // update icons
                     iconView.apply {
                         item.iconWithDescription?.let {
-                            setImageDrawable(it.first)
+                            setImageDrawable(createCompactDrawable(it.first))
                             contentDescription = it.second
                         }
                     }
@@ -710,6 +713,20 @@ constructor(
         private fun Boolean.toInt(): Int {
             return if (this) 1 else 0
         }
+    }
+
+    private fun createCompactDrawable(drawable: Drawable): Drawable {
+        val targetSize = 36
+        val width = maxOf(drawable.intrinsicWidth, 1)
+        val height = maxOf(drawable.intrinsicHeight, 1)
+        val scale = minOf(targetSize.toFloat() / width, targetSize.toFloat() / height)
+        val targetWidth = maxOf(1, (width * scale).roundToInt())
+        val targetHeight = maxOf(1, (height * scale).roundToInt())
+        val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return BitmapDrawable(contentView.resources, bitmap)
     }
 }
 

@@ -26,6 +26,9 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.HandlerExecutor;
@@ -293,7 +296,7 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             return null;
         }
 
-        return drawable.mutate();
+        return createTileArtworkDrawable(drawable);
     }
 
     private boolean isSupportedAudioDevice(CachedBluetoothDevice device) {
@@ -321,7 +324,23 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             return null;
         }
 
-        return drawable.mutate();
+        return createTileArtworkDrawable(drawable);
+    }
+
+    @Nullable
+    private Drawable createTileArtworkDrawable(Drawable drawable) {
+        final int iconSize = mContext.getResources().getDimensionPixelSize(R.dimen.qs_icon_size);
+        final int width = Math.max(drawable.getIntrinsicWidth(), 1);
+        final int height = Math.max(drawable.getIntrinsicHeight(), 1);
+        final float scale = Math.min((float) iconSize / width, (float) iconSize / height);
+        final int targetWidth = Math.max(1, Math.round(width * scale));
+        final int targetHeight = Math.max(1, Math.round(height * scale));
+        final Bitmap bitmap =
+                Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        final Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+        return new BitmapDrawable(mContext.getResources(), bitmap);
     }
 
     private void toggleBluetooth() {
@@ -369,8 +388,22 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             if (refactorBatteryLevelDisplay()) {
                 BatteryLevelsInfo batteryLevelsInfo = device.getBatteryLevelsInfo();
                 if (batteryLevelsInfo != null) {
+                    final int leftBattery = batteryLevelsInfo.getLeftBatteryLevel();
+                    final int rightBattery = batteryLevelsInfo.getRightBatteryLevel();
                     batteryLevel = batteryLevelsInfo.getOverallBatteryLevel();
                     registerBatteryChangedCallback(device);
+                    if (leftBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
+                            && rightBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
+                            && (device.isConnectedHearingAidDevice()
+                                    || BluetoothUtils.getBooleanMetaData(
+                                            device.getDevice(),
+                                            BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET))) {
+                        return mContext.getString(
+                                com.android.settingslib.R.string
+                                        .bluetooth_battery_level_untethered_left_right,
+                                Utils.formatPercentage(leftBattery),
+                                Utils.formatPercentage(rightBattery));
+                    }
                 } else {
                     unregisterBatteryChangedCallback();
                 }
