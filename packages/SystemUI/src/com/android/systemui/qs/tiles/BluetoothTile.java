@@ -28,12 +28,17 @@ import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerExecutor;
 import android.os.Looper;
 import android.os.UserManager;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
 import android.text.TextUtils;
@@ -76,6 +81,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.io.IOException;
 
 import javax.inject.Inject;
 
@@ -287,6 +293,11 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
             return null;
         }
 
+        Drawable metadataDrawable = getMetadataDeviceTileDrawable(bluetoothDevice);
+        if (metadataDrawable != null) {
+            return metadataDrawable;
+        }
+
         if (!BluetoothUtils.isAdvancedDetailsHeader(bluetoothDevice)) {
             return getNamedFallbackDeviceTileDrawable(device);
         }
@@ -297,6 +308,34 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
         }
 
         return createTileArtworkDrawable(drawable);
+    }
+
+    @Nullable
+    private Drawable getMetadataDeviceTileDrawable(BluetoothDevice bluetoothDevice) {
+        Uri iconUri =
+                BluetoothUtils.getUriMetaData(bluetoothDevice, BluetoothDevice.METADATA_MAIN_ICON);
+        if (iconUri == null) {
+            return null;
+        }
+
+        try {
+            mContext.getContentResolver().takePersistableUriPermission(
+                    iconUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (SecurityException e) {
+            Log.e(TAG, "Unable to persist bluetooth metadata artwork permission for " + iconUri, e);
+        }
+
+        try {
+            Bitmap bitmap = MediaStore.Images.Media.getBitmap(mContext.getContentResolver(), iconUri);
+            if (bitmap == null) {
+                return null;
+            }
+            Drawable drawable = new BitmapDrawable(mContext.getResources(), bitmap);
+            return createTileArtworkDrawable(drawable);
+        } catch (IOException | SecurityException e) {
+            Log.e(TAG, "Unable to load bluetooth metadata artwork for " + iconUri, e);
+            return null;
+        }
     }
 
     private boolean isSupportedAudioDevice(CachedBluetoothDevice device) {
@@ -329,17 +368,58 @@ public class BluetoothTile extends QSTileImpl<BooleanState> {
 
     @Nullable
     private Drawable createTileArtworkDrawable(Drawable drawable) {
-        final int iconSize = mContext.getResources().getDimensionPixelSize(R.dimen.qs_icon_size);
+        final int sideViewSize =
+                mContext.getResources().getDimensionPixelSize(R.dimen.qs_side_view_size);
+        final float outerRadius = sideViewSize * 0.42f;
+        final float innerInset = sideViewSize * 0.11f;
+        final RectF outerRect = new RectF(0f, 0f, sideViewSize, sideViewSize);
+        final RectF innerRect = new RectF(
+                innerInset,
+                innerInset,
+                sideViewSize - innerInset,
+                sideViewSize - innerInset);
         final int width = Math.max(drawable.getIntrinsicWidth(), 1);
         final int height = Math.max(drawable.getIntrinsicHeight(), 1);
-        final float scale = Math.min((float) iconSize / width, (float) iconSize / height);
+        final boolean useFitCenter = width > height * 1.25f;
+        final float scale =
+                useFitCenter
+                        ? Math.min(innerRect.width() / width, innerRect.height() / height)
+                        : Math.max(innerRect.width() / width, innerRect.height() / height);
         final int targetWidth = Math.max(1, Math.round(width * scale));
         final int targetHeight = Math.max(1, Math.round(height * scale));
-        final Bitmap bitmap =
-                Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        final Bitmap bitmap = Bitmap.createBitmap(sideViewSize, sideViewSize, Bitmap.Config.ARGB_8888);
         final Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+
+        final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        backgroundPaint.setColor(0x2B040814);
+        canvas.drawRoundRect(outerRect, outerRadius, outerRadius, backgroundPaint);
+
+        final Paint innerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        innerPaint.setColor(0x14FFFFFF);
+        canvas.drawRoundRect(innerRect, outerRadius * 0.8f, outerRadius * 0.8f, innerPaint);
+
+        final Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        highlightPaint.setStyle(Paint.Style.STROKE);
+        highlightPaint.setStrokeWidth(Math.max(1f, sideViewSize * 0.05f));
+        highlightPaint.setColor(0x28FFFFFF);
+        final float inset = highlightPaint.getStrokeWidth() / 2f;
+        canvas.drawRoundRect(
+                new RectF(inset, inset, sideViewSize - inset, sideViewSize - inset),
+                outerRadius,
+                outerRadius,
+                highlightPaint);
+
+        final Path clipPath = new Path();
+        clipPath.addRoundRect(innerRect, outerRadius * 0.78f, outerRadius * 0.78f, Path.Direction.CW);
+        canvas.save();
+        canvas.clipPath(clipPath);
+
+        final int left = Math.round(innerRect.left + ((innerRect.width() - targetWidth) / 2f));
+        final int top = Math.round(innerRect.top + ((innerRect.height() - targetHeight) / 2f));
+        drawable.setBounds(left, top, left + targetWidth, top + targetHeight);
         drawable.draw(canvas);
+        canvas.restore();
+
         return new BitmapDrawable(mContext.getResources(), bitmap);
     }
 

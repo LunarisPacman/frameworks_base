@@ -78,7 +78,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.viewinterop.AndroidView
@@ -98,9 +97,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.systemui.media.controls.ui.view.WaveformSeekBar
 
 private val KeyguardSeekBarHeight = 28.dp
-private val KeyguardMediaHeroHeight = 172.dp
 private val KeyguardMediaArtSize = 72.dp
-private val KeyguardMediaControlBg = Color(0xE60A1020)
 private val KeyguardMediaButtonBg = Color(0x1AFFFFFF)
 
 @Composable
@@ -250,248 +247,234 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
             .fillMaxWidth()
             .padding(horizontal = SpaceSection)
             .clip(ShapeCard)
-            .background(KeyguardMediaControlBg)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCard)
+            .background(Color(0xF0080D18))
+            .border(1.dp, Color.White.copy(alpha = 0.10f), ShapeCard)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = {},
+                onClick = { interactor.openMediaApp() },
             ),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
+        event.albumArt?.let { art ->
+            Image(
+                bitmap = art.toScaledBitmap(420.dp),
+                contentDescription = null,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(KeyguardMediaHeroHeight),
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        alpha = 0.42f,
+                        scaleX = 1.08f,
+                        scaleY = 1.08f,
+                    ),
+                contentScale = ContentScale.Crop,
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color(0xB8132240),
+                        0.42f to Color(0xD6070B16),
+                        1f to Color(0xF4060911),
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = SpaceSection, vertical = SpaceSection),
+            verticalArrangement = Arrangement.spacedBy(SpaceXl),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SpaceXl),
             ) {
                 event.albumArt?.let { art ->
                     Image(
-                        bitmap = art.toScaledBitmap(360.dp),
+                        bitmap = art.toScaledBitmap(KeyguardMediaArtSize),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .size(KeyguardMediaArtSize)
+                            .clip(ShapeIconMedium),
                         contentScale = ContentScale.Crop,
                     )
                 } ?: Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(colors.surfaceTint),
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Black.copy(alpha = 0.18f),
-                                0.48f to Color.Black.copy(alpha = 0.36f),
-                                1f to KeyguardMediaControlBg,
-                            )
-                        )
-                )
-
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(horizontal = SpaceSection, vertical = SpaceXxl),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(SpaceXl),
+                        .size(KeyguardMediaArtSize)
+                        .clip(ShapeIconMedium)
+                        .background(Color.White.copy(alpha = AlphaSubtle)),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    event.albumArt?.let { art ->
-                        Image(
-                            bitmap = art.toScaledBitmap(KeyguardMediaArtSize),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(KeyguardMediaArtSize)
-                                .clip(ShapeIconMedium),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } ?: Box(
-                        modifier = Modifier
-                            .size(KeyguardMediaArtSize)
-                            .clip(ShapeIconMedium)
-                            .background(Color.White.copy(alpha = AlphaSubtle)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.MusicNote,
-                            null,
-                            tint = Color.White.copy(alpha = AlphaSecondary),
-                            modifier = Modifier.size(SpacePanelLarge),
-                        )
-                    }
+                    Icon(
+                        Icons.Filled.MusicNote,
+                        null,
+                        tint = Color.White.copy(alpha = AlphaSecondary),
+                        modifier = Modifier.size(SpacePanelLarge),
+                    )
+                }
 
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(SpaceXs),
-                    ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(SpaceXs),
+                ) {
+                    Text(
+                        event.track.ifEmpty { stringResource(R.string.ax_dynamic_bar_now_playing) },
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (event.artist.isNotEmpty()) {
                         Text(
-                            event.track.ifEmpty { stringResource(R.string.ax_dynamic_bar_now_playing) },
-                            color = Color.White,
-                            style = MaterialTheme.typography.headlineSmall,
+                            event.artist,
+                            color = Color.White.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (event.artist.isNotEmpty()) {
-                            Text(
-                                event.artist,
-                                color = Color.White.copy(alpha = AlphaSecondary),
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                     }
+                }
 
-                    Canvas(modifier = Modifier.width(SpaceSection).height(SpaceXxl)) {
-                        val barW = 3.dp.toPx()
-                        val gap = 2.dp.toPx()
-                        val totalW = 4 * barW + 3 * gap
-                        val startX = (size.width - totalW) / 2f
-                        for (i in 0 until 4) {
-                            val h = (eqBars?.get(i)?.value ?: 0.3f) * size.height
-                            drawRoundRect(
-                                color = colors.accent,
-                                topLeft = Offset(startX + i * (barW + gap), size.height - h),
-                                size = Size(barW, h),
-                                cornerRadius = CornerRadius(barW / 2f),
-                            )
-                        }
+                Canvas(modifier = Modifier.width(SpaceSection).height(SpaceXxl)) {
+                    val barW = 3.dp.toPx()
+                    val gap = 2.dp.toPx()
+                    val totalW = 4 * barW + 3 * gap
+                    val startX = (size.width - totalW) / 2f
+                    for (i in 0 until 4) {
+                        val h = (eqBars?.get(i)?.value ?: 0.3f) * size.height
+                        drawRoundRect(
+                            color = colors.accent,
+                            topLeft = Offset(startX + i * (barW + gap), size.height - h),
+                            size = Size(barW, h),
+                            cornerRadius = CornerRadius(barW / 2f),
+                        )
                     }
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(KeyguardMediaControlBg)
-                    .padding(horizontal = SpaceSection, vertical = SpaceXxl),
-                verticalArrangement = Arrangement.spacedBy(SpaceXl),
+            if (event.outputDeviceName.isNotBlank()) {
+                Surface(
+                    onClick = {
+                        interactor.openMediaOutputSwitcher()
+                        interactor.collapseIsland()
+                    },
+                    shape = ShapeChip,
+                    color = Color.White.copy(alpha = 0.07f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = SpaceXl, vertical = SpaceMd),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(SpaceSm),
+                    ) {
+                        Icon(
+                            Icons.Filled.VolumeUp,
+                            null,
+                            tint = Color.White.copy(alpha = 0.82f),
+                            modifier = Modifier.size(SpaceXl),
+                        )
+                        Text(
+                            event.outputDeviceName,
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+
+            if (event.duration > 0L) {
+                KeyguardMediaSeekBar(event, interactor, colors.accent, useWaveform)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (event.outputDeviceName.isNotBlank()) {
-                    Surface(
-                        onClick = {
+                val leadingAction = event.customActions.firstOrNull()
+                KeyguardMediaControlButton(
+                    onClick = { leadingAction?.let { interactor.sendCustomAction(it.action) } },
+                    enabled = leadingAction != null,
+                ) {
+                    if (leadingAction != null) {
+                        CustomActionIcon(
+                            leadingAction,
+                            tint = Color.White.copy(alpha = 0.82f),
+                            modifier = Modifier.size(SpacePanel),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Shuffle,
+                            stringResource(R.string.ax_dynamic_bar_shuffle),
+                            tint = Color.White.copy(alpha = AlphaDisabled),
+                            modifier = Modifier.size(SpacePanel),
+                        )
+                    }
+                }
+
+                KeyguardMediaControlButton(onClick = { interactor.skipPrev() }) {
+                    Icon(
+                        Icons.Filled.SkipPrevious,
+                        stringResource(R.string.ax_dynamic_bar_previous),
+                        tint = Color.White,
+                        modifier = Modifier.size(SizeIconMd),
+                    )
+                }
+
+                Surface(
+                    onClick = { interactor.togglePlayPause() },
+                    modifier = Modifier.size(SizeButtonXl),
+                    shape = CircleShape,
+                    color = colors.accent,
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            if (event.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (event.isPlaying) stringResource(R.string.ax_dynamic_bar_pause)
+                            else stringResource(R.string.ax_dynamic_bar_play),
+                            tint = colors.onAccent,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+
+                KeyguardMediaControlButton(onClick = { interactor.skipNext() }) {
+                    Icon(
+                        Icons.Filled.SkipNext,
+                        stringResource(R.string.ax_dynamic_bar_next),
+                        tint = Color.White,
+                        modifier = Modifier.size(SizeIconMd),
+                    )
+                }
+
+                val trailingAction = event.customActions.getOrNull(1)
+                KeyguardMediaControlButton(
+                    onClick = {
+                        if (trailingAction != null) {
+                            interactor.sendCustomAction(trailingAction.action)
+                        } else {
                             interactor.openMediaOutputSwitcher()
                             interactor.collapseIsland()
-                        },
-                        shape = ShapeChip,
-                        color = KeyguardMediaButtonBg,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = SpaceXl, vertical = SpaceMd),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SpaceSm),
-                        ) {
-                            Icon(
-                                Icons.Filled.VolumeUp,
-                                null,
-                                tint = Color.White.copy(alpha = AlphaSecondary),
-                                modifier = Modifier.size(SpaceXl),
-                            )
-                            Text(
-                                event.outputDeviceName,
-                                color = Color.White.copy(alpha = AlphaSecondary),
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                            )
                         }
-                    }
-                }
-
-                if (event.duration > 0L) {
-                    KeyguardMediaSeekBar(event, interactor, colors.accent, useWaveform)
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
+                    },
                 ) {
-                    val leadingAction = event.customActions.firstOrNull()
-                    KeyguardMediaControlButton(
-                        onClick = { leadingAction?.let { interactor.sendCustomAction(it.action) } },
-                        enabled = leadingAction != null,
-                    ) {
-                        if (leadingAction != null) {
-                            CustomActionIcon(
-                                leadingAction,
-                                tint = Color.White.copy(alpha = AlphaSecondary),
-                                modifier = Modifier.size(SpacePanel),
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.Shuffle,
-                                stringResource(R.string.ax_dynamic_bar_shuffle),
-                                tint = Color.White.copy(alpha = AlphaDisabled),
-                                modifier = Modifier.size(SpacePanel),
-                            )
-                        }
-                    }
-
-                    KeyguardMediaControlButton(
-                        onClick = { interactor.skipPrev() },
-                    ) {
-                        Icon(
-                            Icons.Filled.SkipPrevious,
-                            stringResource(R.string.ax_dynamic_bar_previous),
-                            tint = Color.White,
-                            modifier = Modifier.size(SizeIconMd),
+                    if (trailingAction != null) {
+                        CustomActionIcon(
+                            trailingAction,
+                            tint = Color.White.copy(alpha = 0.82f),
+                            modifier = Modifier.size(SpacePanel),
                         )
-                    }
-
-                    Surface(
-                        onClick = { interactor.togglePlayPause() },
-                        modifier = Modifier.size(SizeButtonXl),
-                        shape = CircleShape,
-                        color = colors.accent,
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                if (event.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                if (event.isPlaying) stringResource(R.string.ax_dynamic_bar_pause)
-                                else stringResource(R.string.ax_dynamic_bar_play),
-                                tint = colors.onAccent,
-                                modifier = Modifier.size(32.dp),
-                            )
-                        }
-                    }
-
-                    KeyguardMediaControlButton(
-                        onClick = { interactor.skipNext() },
-                    ) {
+                    } else {
                         Icon(
-                            Icons.Filled.SkipNext,
-                            stringResource(R.string.ax_dynamic_bar_next),
-                            tint = Color.White,
-                            modifier = Modifier.size(SizeIconMd),
+                            Icons.Filled.VolumeUp,
+                            stringResource(R.string.ax_dynamic_bar_output),
+                            tint = Color.White.copy(alpha = 0.82f),
+                            modifier = Modifier.size(SpacePanel),
                         )
-                    }
-
-                    val trailingAction = event.customActions.getOrNull(1)
-                    KeyguardMediaControlButton(
-                        onClick = {
-                            if (trailingAction != null) {
-                                interactor.sendCustomAction(trailingAction.action)
-                            } else {
-                                interactor.openMediaOutputSwitcher()
-                                interactor.collapseIsland()
-                            }
-                        },
-                    ) {
-                        if (trailingAction != null) {
-                            CustomActionIcon(
-                                trailingAction,
-                                tint = Color.White.copy(alpha = AlphaSecondary),
-                                modifier = Modifier.size(SpacePanel),
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.VolumeUp,
-                                stringResource(R.string.ax_dynamic_bar_output),
-                                tint = Color.White.copy(alpha = AlphaSecondary),
-                                modifier = Modifier.size(SpacePanel),
-                            )
-                        }
                     }
                 }
             }
