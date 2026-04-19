@@ -21,34 +21,47 @@
 
     <alpha
         android:fromAlpha="1.0"
-        android:toAlpha="1.0"
+        android:toAlpha="0.92"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
         android:interpolator="@interpolator/standard_accelerate"
         android:startOffset="0"
-        android:duration="450" />
+        android:duration="120" />
 
-    <translate
-        android:fromXDelta="0"
-        android:toXDelta="-96dp"
+    <scale
+        android:fromXScale="1.0"
+        android:toXScale="0.992"
+        android:fromYScale="1.0"
+        android:toYScale="0.992"
+        android:pivotX="50%"
+        android:pivotY="50%"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_accelerate"
+        android:duration="360" />
+
+    <translate
+        android:fromXDelta="0"
+        android:toXDelta="-12dp"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/emphasized_accelerate"
         android:startOffset="0"
-        android:duration="450" />
+        android:duration="360" />
 
     <extend
         android:fromExtendLeft="0"
         android:fromExtendTop="0"
-        android:fromExtendRight="96dp"
+        android:fromExtendRight="12dp"
         android:fromExtendBottom="0"
         android:toExtendLeft="0"
         android:toExtendTop="0"
-        android:toExtendRight="96dp"
+        android:toExtendRight="12dp"
         android:toExtendBottom="0"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_accelerate"
         android:startOffset="0"
-        android:duration="450" />
+        android:duration="360" />
 </set>

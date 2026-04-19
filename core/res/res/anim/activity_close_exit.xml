@@ -28,29 +28,42 @@
         android:fillBefore="true"
         android:fillAfter="true"
         android:interpolator="@interpolator/linear"
-        android:startOffset="35"
-        android:duration="83" />
+        android:startOffset="10"
+        android:duration="120" />
 
-    <translate
-        android:fromXDelta="0"
-        android:toXDelta="96dp"
+    <scale
+        android:fromXScale="1.0"
+        android:toXScale="0.985"
+        android:fromYScale="1.0"
+        android:toYScale="0.985"
+        android:pivotX="50%"
+        android:pivotY="50%"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_accelerate"
+        android:duration="333" />
+
+    <translate
+        android:fromXDelta="0"
+        android:toXDelta="32dp"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/emphasized_accelerate"
         android:startOffset="0"
-        android:duration="450" />
+        android:duration="333" />
 
     <extend
-        android:fromExtendLeft="96dp"
+        android:fromExtendLeft="32dp"
         android:fromExtendTop="0"
         android:fromExtendRight="0"
         android:fromExtendBottom="0"
-        android:toExtendLeft="96dp"
+        android:toExtendLeft="32dp"
         android:toExtendTop="0"
         android:toExtendRight="0"
         android:toExtendBottom="0"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/emphasized_accelerate"
         android:startOffset="0"
-        android:duration="450" />
+        android:duration="333" />
 </set>

@@ -20,14 +20,37 @@
      android:shareInterpolator="false"
      android:hasRoundedCorners="true">
 
-    <translate
-        android:fromXDelta="0"
-        android:toXDelta="-105%"
+    <alpha
+        android:fromAlpha="1.0"
+        android:toAlpha="0.92"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+        android:interpolator="@interpolator/standard_accelerate"
         android:startOffset="0"
-        android:duration="500"/>
+        android:duration="120"/>
+
+    <scale
+        android:fromXScale="1.0"
+        android:toXScale="0.992"
+        android:fromYScale="1.0"
+        android:toYScale="0.992"
+        android:pivotX="50%"
+        android:pivotY="50%"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/emphasized_accelerate"
+        android:duration="333"/>
+
+    <translate
+        android:fromXDelta="0"
+        android:toXDelta="-8%"
+        android:fillEnabled="true"
+        android:fillBefore="true"
+        android:fillAfter="true"
+        android:interpolator="@interpolator/emphasized_accelerate"
+        android:startOffset="0"
+        android:duration="333"/>
 
 </set>
