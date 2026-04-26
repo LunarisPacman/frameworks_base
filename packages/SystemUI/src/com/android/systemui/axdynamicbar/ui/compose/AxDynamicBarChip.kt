@@ -73,6 +73,8 @@ import com.android.systemui.axdynamicbar.shared.PillPrimary
 import com.android.systemui.axdynamicbar.shared.ShapeXl
 import com.android.systemui.axdynamicbar.shared.ShapeXs
 import com.android.systemui.axdynamicbar.shared.SizeBadge
+import com.android.systemui.axdynamicbar.shared.SpaceMd
+import com.android.systemui.axdynamicbar.shared.SpaceSm
 import com.android.systemui.axdynamicbar.shared.SpaceXs
 import com.android.systemui.axdynamicbar.shared.TsBadge
 import com.android.systemui.axdynamicbar.shared.chipAccentColorFor
@@ -109,7 +111,7 @@ fun AxDynamicBarChip(
     val chipState = state
     val displayEvent = chipState?.let { it.notificationAlert ?: it.event }
     val hideCompactMediaChip = isExpanded && displayEvent is IslandEvent.Media
-
+    
     val carrierName = if (isOnKeyguard && ignoreKeyguard) keyguardCarrier.takeIf { it.isNotBlank() } else null
     val screenWidthPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
@@ -461,3 +463,4 @@ private fun StatusBarSportsTeamBadge(name: String, icon: Drawable?, contentColor
 }
 
 private data class ChipDisplay(val event: IslandEvent, val isAlert: Boolean)
+

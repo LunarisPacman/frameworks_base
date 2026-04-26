@@ -2,7 +2,6 @@
 
 package com.android.systemui.axdynamicbar.ui.compose
 
-import androidx.core.graphics.ColorUtils
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -25,30 +24,22 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.viewinterop.AndroidView
+import android.graphics.drawable.LayerDrawable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -56,7 +47,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -69,28 +59,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -111,16 +99,15 @@ import java.util.Calendar
 
 private val ChipHeight = 36.dp
 private val ChipShape = ShapeChip
+private val StatusBarChipPrimaryStyle: TextStyle
+    @Composable get() = PillPrimary.copy(fontSize = 10.5.sp)
+private val StatusBarChipBadgeStyle: TextStyle
+    @Composable get() = TsBadge.copy(fontSize = 8.5.sp)
 private val ChipIconSize = ChipHeight - SpaceLg
 private val ActionSize = SpacePanel
 private val ActionIconSize = SizeBadge
 private val BatteryIconSize = ChipHeight - SpaceXxl
 private val CountBadgeHeight = ChipHeight / 2
-private val MediaClusterButtonSize = 24.dp
-private val MediaClusterPlaySize = 26.dp
-private val MediaClusterIconSize = 15.dp
-private val MediaClusterPlayIconSize = 16.dp
-private val MediaChipShadow = 10.dp
 
 @Composable
 fun AxDynamicBarKeyguardChip(
@@ -136,89 +123,33 @@ fun AxDynamicBarKeyguardChip(
     val batteryInfo by viewModel.keyguardBatteryInfo.collectAsStateWithLifecycle()
     val isKeyguardExpanded by viewModel.isKeyguardExpanded.collectAsStateWithLifecycle()
     val touchSlop = LocalViewConfiguration.current.touchSlop
-    val hapticFeedback = LocalHapticFeedback.current
     val batteryString by viewModel.batteryString.collectAsStateWithLifecycle()
-    val chipState = state
-    val rawEvent = chipState?.let { it.notificationAlert ?: it.event }
-    val displayEvent: IslandEvent? =
-        when {
-            chipState == null -> null
-            isKeyguardMusicPillEnabled -> rawEvent
-            rawEvent is IslandEvent.Media ->
-                chipState.allEvents.firstOrNull { it !is IslandEvent.Media }
-            else -> rawEvent
-        }
-    val isMediaExpanded = state?.event is IslandEvent.Media
-    val hideCompactMediaPill =
-        isKeyguardExpanded && (
-            isMediaExpanded ||
-                rawEvent is IslandEvent.Media ||
-                displayEvent is IslandEvent.Media
-            )
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     val motionScheme = MaterialTheme.motionScheme
 
     Box(modifier = modifier) {
+
         AnimatedVisibility(
             visible = isKeyguardExpanded && state != null,
-            enter =
-                if (isMediaExpanded) {
-                    fadeIn(
-                        animationSpec = tween(240, delayMillis = 12, easing = FastOutSlowInEasing),
-                    ) +
-                        slideInVertically(
-                            animationSpec = tween(360, easing = FastOutSlowInEasing),
-                            initialOffsetY = { it / 3 },
-                        ) +
-                        expandVertically(
-                            animationSpec = tween(360, easing = FastOutSlowInEasing),
-                            expandFrom = Alignment.Bottom,
-                        ) +
-                        scaleIn(
-                            animationSpec = tween(360, easing = FastOutSlowInEasing),
-                            initialScale = 0.88f,
-                            transformOrigin = TransformOrigin(0.5f, 1f),
-                        )
-                } else {
-                    fadeIn(motionScheme.defaultEffectsSpec()) +
-                        slideInVertically(
-                            animationSpec = motionScheme.defaultSpatialSpec(),
-                            initialOffsetY = { it / 3 },
-                        ) +
-                        expandVertically(
-                            animationSpec = motionScheme.defaultSpatialSpec(),
-                            expandFrom = Alignment.Bottom,
-                        )
-                },
-            exit =
-                if (isMediaExpanded) {
-                    fadeOut(
-                        animationSpec = tween(180, easing = FastOutSlowInEasing),
-                    ) +
-                        slideOutVertically(
-                            animationSpec = tween(220, easing = FastOutSlowInEasing),
-                            targetOffsetY = { it / 6 },
-                        ) +
-                        shrinkVertically(
-                            animationSpec = tween(220, easing = FastOutSlowInEasing),
-                            shrinkTowards = Alignment.Bottom,
-                        ) +
-                        scaleOut(
-                            animationSpec = tween(220, easing = FastOutSlowInEasing),
-                            targetScale = 0.96f,
-                            transformOrigin = TransformOrigin(0.5f, 1f),
-                        )
-                } else {
-                    fadeOut(motionScheme.fastEffectsSpec()) +
-                        slideOutVertically(
-                            animationSpec = motionScheme.fastSpatialSpec(),
-                            targetOffsetY = { it / 4 },
-                        ) +
-                        shrinkVertically(
-                            animationSpec = motionScheme.fastSpatialSpec(),
-                            shrinkTowards = Alignment.Bottom,
-                        )
-                },
+            enter = fadeIn(motionScheme.defaultEffectsSpec()) +
+                slideInVertically(
+                    animationSpec = motionScheme.defaultSpatialSpec(),
+                    initialOffsetY = { it / 3 },
+                ) +
+                expandVertically(
+                    animationSpec = motionScheme.defaultSpatialSpec(),
+                    expandFrom = Alignment.Bottom,
+                ),
+            exit = fadeOut(motionScheme.fastEffectsSpec()) +
+                slideOutVertically(
+                    animationSpec = motionScheme.fastSpatialSpec(),
+                    targetOffsetY = { it / 4 },
+                ) +
+                shrinkVertically(
+                    animationSpec = motionScheme.fastSpatialSpec(),
+                    shrinkTowards = Alignment.Bottom,
+                ),
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopStart)
@@ -236,39 +167,9 @@ fun AxDynamicBarKeyguardChip(
         }
 
         AnimatedVisibility(
-            visible = isOnKeyguard && isEnabled && isKeyguardEnabled && !hideCompactMediaPill,
-            enter =
-                if (displayEvent is IslandEvent.Media) {
-                    fadeIn(tween(180, delayMillis = 24, easing = FastOutSlowInEasing)) +
-                        slideInVertically(
-                            animationSpec = tween(240, easing = FastOutSlowInEasing),
-                            initialOffsetY = { it / 3 },
-                        ) +
-                        scaleIn(
-                            initialScale = 0.92f,
-                            animationSpec = tween(240, easing = FastOutSlowInEasing),
-                            transformOrigin = TransformOrigin(0.5f, 1f),
-                        )
-                } else {
-                    fadeIn(motionScheme.defaultEffectsSpec()) +
-                        scaleIn(initialScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec())
-                },
-            exit =
-                if (displayEvent is IslandEvent.Media) {
-                    fadeOut(tween(110, easing = FastOutSlowInEasing)) +
-                        slideOutVertically(
-                            animationSpec = tween(180, easing = FastOutSlowInEasing),
-                            targetOffsetY = { it / 3 },
-                        ) +
-                        scaleOut(
-                            targetScale = 0.88f,
-                            animationSpec = tween(180, easing = FastOutSlowInEasing),
-                            transformOrigin = TransformOrigin(0.5f, 1f),
-                        )
-                } else {
-                    fadeOut(motionScheme.fastEffectsSpec()) +
-                        scaleOut(targetScale = 0.9f, animationSpec = motionScheme.fastSpatialSpec())
-                },
+            visible = isOnKeyguard && isEnabled && isKeyguardEnabled,
+            enter = fadeIn(motionScheme.defaultEffectsSpec()) + scaleIn(initialScale = 0.9f, animationSpec = motionScheme.defaultSpatialSpec()),
+            exit = fadeOut(motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.9f, animationSpec = motionScheme.fastSpatialSpec()),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .pointerInput(viewModel) {
@@ -283,9 +184,11 @@ fun AxDynamicBarKeyguardChip(
                             if (!change.pressed) {
                                 if (dragging) {
                                     change.consume()
-                                    if (totalDx > 0) viewModel.cyclePrev()
-                                    else viewModel.cycleNext()
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (abs(totalDx) > touchSlop) {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        if (totalDx > 0) viewModel.cyclePrev()
+                                        else viewModel.cycleNext()
+                                    }
                                 }
                                 break
                             }
@@ -301,7 +204,18 @@ fun AxDynamicBarKeyguardChip(
                     }
                 },
         ) {
+            val chipState = state
             if (chipState != null) {
+                val rawEvent = chipState.notificationAlert ?: chipState.event
+                val displayEvent: com.android.systemui.axdynamicbar.model.IslandEvent? =
+                    when {
+                        isKeyguardMusicPillEnabled -> rawEvent
+                        rawEvent is com.android.systemui.axdynamicbar.model.IslandEvent.Media -> {
+                            chipState.allEvents.firstOrNull { it !is com.android.systemui.axdynamicbar.model.IslandEvent.Media }
+                        }
+                        else -> rawEvent
+                    }
+
                 if (displayEvent == null) {
                     KeyguardBatteryChip(
                         batteryInfo,
@@ -315,28 +229,13 @@ fun AxDynamicBarKeyguardChip(
                 AnimatedContent(
                     targetState = displayEvent,
                     transitionSpec = {
-                        (fadeIn(motionScheme.defaultEffectsSpec()) +
-                            slideInHorizontally(
-                                animationSpec = motionScheme.defaultSpatialSpec(),
-                                initialOffsetX = { it / 7 },
-                            ) +
-                            scaleIn(
-                                initialScale = 0.985f,
-                                animationSpec = motionScheme.defaultSpatialSpec(),
-                            )) togetherWith
-                            (fadeOut(motionScheme.fastEffectsSpec()) +
-                                slideOutHorizontally(
-                                    animationSpec = motionScheme.fastSpatialSpec(),
-                                    targetOffsetX = { -it / 10 },
-                                ) +
-                                scaleOut(
-                                    targetScale = 0.985f,
-                                    animationSpec = motionScheme.fastSpatialSpec(),
-                                )) using
-                            SizeTransform(
-                                clip = false,
-                                sizeAnimationSpec = { _, _ -> motionScheme.defaultSpatialSpec() },
-                            )
+                        (fadeIn(motionScheme.defaultEffectsSpec()) + scaleIn(
+                            initialScale = 0.95f,
+                            animationSpec = motionScheme.defaultSpatialSpec(),
+                        )) togetherWith (fadeOut(motionScheme.fastEffectsSpec()) + scaleOut(
+                            targetScale = 0.95f,
+                            animationSpec = motionScheme.fastSpatialSpec(),
+                        )) using SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> motionScheme.defaultSpatialSpec() })
                     },
                     contentKey = { it::class.simpleName },
                     label = "keyguard_chip_event",
@@ -396,126 +295,94 @@ private fun KeyguardChipBody(
 ) {
     val context = LocalContext.current
     val motionScheme = MaterialTheme.motionScheme
-    val isMediaEvent = event is IslandEvent.Media
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     val chipColors =
         when (event) {
             is IslandEvent.Media -> rememberMediaColors(event)
             else -> rememberIslandColors(event)
         }
-    val isChipAccentLight =
-        ColorUtils.calculateLuminance(chipColors.accent.toArgb()) > 0.42
-    val mediaPrimaryTextColor =
-        if (isChipAccentLight) Color(0xFF171119) else Color(0xFFF8EEF4)
-    val mediaSecondaryTextColor =
-        if (isChipAccentLight) Color(0xFF2A1C2A).copy(alpha = 0.72f)
-        else Color.White.copy(alpha = 0.74f)
-    val resolvedContentColor =
-        if (isMediaEvent) mediaPrimaryTextColor
-        else chipContentColorOn(darkenColor(chipColors.accent, keep = 0.56f))
-    val chipFillBrush =
+    val isMediaEvent = event is IslandEvent.Media
+    val statusChipBrush =
         if (isMediaEvent) {
-            Brush.horizontalGradient(
-                colorStops = arrayOf(
-                    0.0f to darkenColor(lerp(chipColors.surfaceTint, chipColors.accent, 0.08f), keep = 0.80f).copy(alpha = 0.54f),
-                    0.45f to darkenColor(lerp(chipColors.surfaceTint, chipColors.accent, 0.30f), keep = 0.88f).copy(alpha = 0.48f),
-                    1.0f to darkenColor(lerp(chipColors.accent, chipColors.surfaceTint, 0.24f), keep = 0.58f).copy(alpha = 0.66f),
-                )
-            )
+            null
         } else {
             Brush.horizontalGradient(
                 colorStops = arrayOf(
-                    0.0f to darkenColor(chipColors.accent, keep = 0.60f).copy(alpha = 0.96f),
-                    0.44f to darkenColor(lerp(chipColors.accent, chipColors.surfaceTint, 0.36f), keep = 0.68f).copy(alpha = 0.92f),
-                    1.0f to darkenColor(chipColors.accent, keep = 0.46f).copy(alpha = 0.94f),
+                    0.0f to lerp(chipColors.accent, Color(0xFF17131D), 0.82f).copy(alpha = 0.98f),
+                    0.45f to lerp(chipColors.surfaceTint, Color(0xFF201725), 0.74f).copy(alpha = 0.96f),
+                    1.0f to Color(0xFF16131A).copy(alpha = 0.94f),
                 )
             )
         }
     val chipBorderColor =
         if (isMediaEvent) {
-            lerp(chipColors.accent, Color.White, 0.24f).copy(alpha = 0.20f)
-        } else {
-            lerp(chipColors.accent, Color.White, 0.22f).copy(alpha = 0.18f)
-        }
-    val mediaControlBg =
-        if (isMediaEvent) {
-            lerp(chipColors.surfaceTint, chipColors.accent, 0.18f).copy(alpha = if (isChipAccentLight) 0.18f else 0.24f)
-        } else {
-            lerp(chipColors.surfaceTint, chipColors.accent, 0.28f).copy(alpha = if (isChipAccentLight) 0.18f else 0.24f)
-        }
-    val mediaPlayBg =
-        if (isMediaEvent) {
-            lerp(chipColors.accent, Color.White, if (isChipAccentLight) 0.12f else 0.05f)
-        } else accent
-    val mediaPlayFg = if (isChipAccentLight) Color(0xFF161118) else chipColors.onAccent
-    val mediaClusterBg =
-        if (isMediaEvent) {
-            lerp(chipColors.surfaceTint, chipColors.accent, 0.24f).copy(alpha = if (isChipAccentLight) 0.18f else 0.22f)
-        } else {
-            mediaControlBg.copy(alpha = 0.92f)
-        }
-    val mediaClusterBorder =
-        if (isMediaEvent) {
-            lerp(chipColors.accent, Color.White, 0.18f).copy(alpha = 0.12f)
-        } else {
             Color.Transparent
-        }
-    val mediaClusterBrush =
-        if (isMediaEvent) {
-            Brush.horizontalGradient(
-                colorStops = arrayOf(
-                    0.0f to mediaClusterBg.copy(alpha = if (isChipAccentLight) 0.20f else 0.26f),
-                    1.0f to lerp(chipColors.accent, chipColors.surfaceTint, 0.28f)
-                        .copy(alpha = if (isChipAccentLight) 0.24f else 0.30f),
-                )
-            )
         } else {
-            null
+            lerp(chipColors.accent, Color.White, 0.20f).copy(alpha = 0.16f)
         }
-    val mediaBadgeBg =
-        lerp(chipColors.surfaceTint, chipColors.accent, 0.18f).copy(alpha = if (isChipAccentLight) 0.24f else 0.28f)
-    val genericSurfaceHighlight =
-        Brush.linearGradient(
-            colorStops = arrayOf(
-                0.0f to Color.White.copy(alpha = 0.10f),
-                0.34f to Color.Transparent,
-                1.0f to Color.Black.copy(alpha = 0.14f),
-            )
-        )
-    val genericActionBg =
-        lerp(chipColors.surfaceTint, chipColors.accent, 0.18f).copy(alpha = if (isChipAccentLight) 0.18f else 0.24f)
-    val genericActionBorder =
-        lerp(chipColors.accent, Color.White, 0.24f).copy(alpha = 0.16f)
+    val resolvedContentColor =
+        if (isMediaEvent) {
+            if (event.albumArt != null) Color.White else contentColor
+        } else {
+            val darkSurface = darkenColor(lerp(chipColors.accent, Color(0xFF18141D), 0.78f), keep = 1f)
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(darkSurface.toArgb()) > 0.42f) {
+                Color(0xFF161118)
+            } else {
+                Color.White
+            }
+        }
+    val badgeBg =
+        if (isMediaEvent) {
+            lerp(accent, contentColor, 0.3f)
+        } else {
+            lerp(chipColors.accent, Color(0xFF18141C), 0.64f).copy(alpha = 0.96f)
+        }
+    val badgeBorder =
+        if (isMediaEvent) {
+            Color.Transparent
+        } else {
+            lerp(chipColors.accent, Color.White, 0.20f).copy(alpha = 0.14f)
+        }
 
-    Box(contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .height(ChipHeight)
-                .widthIn(max = 260.dp)
-                .then(
-                    if (isMediaEvent) Modifier.shadow(MediaChipShadow, ChipShape, clip = false)
-                    else Modifier
-                )
-                .clip(ChipShape)
-                .background(chipFillBrush, ChipShape)
-                .border(1.dp, chipBorderColor, ChipShape)
-                .animateContentSize(motionScheme.defaultSpatialSpec())
-                .then(
-                    if (progress != null) {
-                        val trackColor =
-                            if (isMediaEvent) mediaControlBg.copy(alpha = 0.62f)
-                            else genericActionBg.copy(alpha = 0.70f)
-                        val fillColor =
-                            if (isMediaEvent) chipColors.accent.copy(alpha = 0.92f)
-                            else lerp(chipColors.accent, Color.White, 0.12f).copy(alpha = 0.92f)
-                        Modifier.drawWithContent {
-                            drawContent()
-                            val barH = SizeStrokeWidth.toPx()
-                            val y = size.height - barH
-                            drawRect(trackColor, Offset(0f, y), Size(size.width, barH))
-                            drawRect(fillColor, Offset(0f, y), Size(size.width * progress, barH))
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .height(ChipHeight)
+            .widthIn(max = 260.dp)
+            .clip(ChipShape)
+            .animateContentSize(motionScheme.defaultSpatialSpec())
+    ) {
+        if (event is IslandEvent.Media && event.albumArt != null) {
+            Image(
+                bitmap = event.albumArt.toScaledBitmap(260.dp),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(radius = 20.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+            )
+            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.4f)))
+        } else {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(
+                        if (statusChipBrush != null) {
+                            Modifier
+                                .background(statusChipBrush!!, ChipShape)
+                                .border(1.dp, chipBorderColor, ChipShape)
+                        } else {
+                            Modifier.background(accent)
                         }
-                    } else Modifier
-                )
+                    )
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                // Progress bar is now rendered separately at the bottom of the chip
                 .clickable {
                     when (event) {
                         is IslandEvent.Notification ->
@@ -525,77 +392,18 @@ private fun KeyguardChipBody(
                         is IslandEvent.AppSwitch -> { }
                         else -> viewModel.togglePanel()
                     }
-                },
-        ) {
-            if (isMediaEvent) {
-                event.albumArt?.let { art ->
-                    Image(
-                        bitmap = art.toScaledBitmap(220.dp),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .blur(18.dp),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.48f,
-                    )
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                colorStops = arrayOf(
-                                    0.0f to chipColors.accent.copy(alpha = 0.14f),
-                                    0.40f to chipColors.surfaceTint.copy(alpha = 0.08f),
-                                    1.0f to darkenColor(lerp(chipColors.accent, chipColors.surfaceTint, 0.34f), keep = 0.44f)
-                                        .copy(alpha = 0.22f),
-                                )
-                            )
-                        )
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                colorStops = arrayOf(
-                                    0.0f to Color.White.copy(alpha = 0.08f),
-                                    0.42f to Color.Transparent,
-                                    1.0f to Color.Black.copy(alpha = 0.16f),
-                                )
-                            )
-                        )
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(genericSurfaceHighlight)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 7.dp, end = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+                .padding(start = SpaceSm, end = SpaceMd),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (event is IslandEvent.Media) {
                 AnimatedContent(
                     targetState = event.albumArt,
                     transitionSpec = {
                         (fadeIn(motionScheme.defaultEffectsSpec()) +
-                            slideInHorizontally(
-                                animationSpec = motionScheme.defaultSpatialSpec(),
-                                initialOffsetX = { it / 6 },
-                            ) +
-                            scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec())) togetherWith
+                            scaleIn(initialScale = 0.85f, animationSpec = motionScheme.defaultSpatialSpec())) togetherWith
                             (fadeOut(motionScheme.fastEffectsSpec()) +
-                                slideOutHorizontally(
-                                    animationSpec = motionScheme.fastSpatialSpec(),
-                                    targetOffsetX = { -it / 8 },
-                                ) +
-                                scaleOut(targetScale = 0.96f, animationSpec = motionScheme.fastSpatialSpec())) using
+                                scaleOut(targetScale = 0.85f, animationSpec = motionScheme.fastSpatialSpec())) using
                             SizeTransform(clip = false)
                     },
                     contentKey = { it?.hashCode() ?: 0 },
@@ -607,8 +415,7 @@ private fun KeyguardChipBody(
                             contentDescription = null,
                             modifier = Modifier
                                 .size(ChipIconSize)
-                                .clip(ShapeXs)
-                                .border(1.dp, Color.White.copy(alpha = 0.10f), ShapeXs),
+                                .clip(ShapeXs),
                             contentScale = ContentScale.Crop,
                         )
                     } else {
@@ -620,134 +427,87 @@ private fun KeyguardChipBody(
                     targetState = event,
                     transitionSpec = {
                         (fadeIn(motionScheme.defaultEffectsSpec()) +
-                            slideInHorizontally(
-                                animationSpec = motionScheme.defaultSpatialSpec(),
-                                initialOffsetX = { it / 8 },
-                            ) +
-                            scaleIn(initialScale = 0.94f, animationSpec = motionScheme.defaultSpatialSpec())) togetherWith
+                            scaleIn(initialScale = 0.85f, animationSpec = motionScheme.defaultSpatialSpec())) togetherWith
                             (fadeOut(motionScheme.fastEffectsSpec()) +
-                                slideOutHorizontally(
-                                    animationSpec = motionScheme.fastSpatialSpec(),
-                                    targetOffsetX = { -it / 10 },
-                                ) +
-                                scaleOut(targetScale = 0.97f, animationSpec = motionScheme.fastSpatialSpec())) using
+                                scaleOut(targetScale = 0.85f, animationSpec = motionScheme.fastSpatialSpec())) using
                             SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> motionScheme.defaultSpatialSpec() })
                     },
                     contentKey = { "${it.track}|${it.artist}" },
                     label = "kg_media_text",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f, fill = false),
                 ) { ev ->
                     if (ev.artist.isNotBlank()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 ev.track.ifEmpty { stringResource(R.string.ax_dynamic_bar_music) },
-                                style = CompactMediaPrimaryStyle(),
-                                color = mediaPrimaryTextColor,
+                                style = StatusBarChipPrimaryStyle,
+                                color = resolvedContentColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f).basicMarquee(iterations = 1),
+                                modifier = Modifier.widthIn(max = 90.dp).basicMarquee(iterations = 1),
                             )
                             Text(
-                                "•",
-                                style = CompactMediaSecondaryStyle(),
-                                color = mediaSecondaryTextColor.copy(alpha = 0.82f),
+                                " · ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = resolvedContentColor.copy(alpha = AlphaHint),
                             )
                             Text(
                                 ev.artist,
-                                style = CompactMediaSecondaryStyle(),
-                                color = mediaSecondaryTextColor,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = resolvedContentColor.copy(alpha = AlphaSecondary),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 68.dp),
+                                modifier = Modifier.widthIn(max = 60.dp),
                             )
                         }
                     } else {
-                        MarqueeText(
-                            ev.track.ifEmpty { stringResource(R.string.ax_dynamic_bar_music) },
-                            mediaPrimaryTextColor,
-                            Modifier,
-                            style = CompactMediaPrimaryStyle(),
-                            maxWidth = 124.dp,
-                        )
+                        MarqueeText(ev.track.ifEmpty { stringResource(R.string.ax_dynamic_bar_music) }, resolvedContentColor, Modifier)
                     }
                 }
-                Spacer(Modifier.width(5.dp))
-                Row(
-                    modifier = Modifier
-                        .clip(ShapeChip)
-                        .then(
-                            if (mediaClusterBrush != null) {
-                                Modifier.background(mediaClusterBrush, ShapeChip)
-                            } else {
-                                Modifier.background(mediaClusterBg, ShapeChip)
-                            }
-                        )
-                        .border(1.dp, mediaClusterBorder, ShapeChip)
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                Spacer(Modifier.width(SpaceXs))
+                ActionButton(
+                    icon = ActionIcon.SKIP_PREV,
+                    color = resolvedContentColor,
+                    bgColor = lerp(accent, resolvedContentColor, AlphaSubtle),
+                    onClick = { viewModel.skipPrev() },
+                    size = ActionSize,
+                    iconSize = ActionIconSize,
+                )
+                Spacer(Modifier.width(SpaceXxs))
+                Surface(
+                    onClick = { viewModel.togglePlayPause() },
+                    modifier = Modifier.size(ActionSize),
+                    shape = CircleShape,
+                    color = lerp(accent, resolvedContentColor, AlphaSubtle),
                 ) {
-                    CompactMediaControlButton(
-                        icon = ActionIcon.SKIP_PREV,
-                        color = mediaSecondaryTextColor.copy(alpha = 0.92f),
-                        onClick = { viewModel.skipPrev() },
-                        size = MediaClusterButtonSize,
-                        iconSize = MediaClusterIconSize,
-                    )
-                    Surface(
-                        onClick = { viewModel.togglePlayPause() },
-                        modifier = Modifier.size(MediaClusterPlaySize),
-                        shape = CircleShape,
-                        color = mediaPlayBg,
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                if (event.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = stringResource(
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(ActionSize)) {
+                        Icon(
+                            if (event.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = stringResource(
                                 if (event.isPlaying) R.string.ax_dynamic_bar_pause
-                                    else R.string.ax_dynamic_bar_play,
-                                ),
-                                tint = mediaPlayFg,
-                                modifier = Modifier.size(15.dp),
-                            )
-                        }
-                    }
-                    CompactMediaControlButton(
-                        icon = ActionIcon.SKIP_NEXT,
-                        color = mediaSecondaryTextColor.copy(alpha = 0.92f),
-                        onClick = { viewModel.skipNext() },
-                        size = MediaClusterButtonSize,
-                        iconSize = MediaClusterIconSize,
-                    )
-                    if (eventCount > 1) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .height(CountBadgeHeight - 2.dp)
-                                .widthIn(min = CountBadgeHeight - 2.dp)
-                                .background(mediaBadgeBg, ShapeChip)
-                                .padding(horizontal = SpaceXxs),
-                        ) {
-                            Text(
-                                "$eventCount",
-                                style = TsBadge,
-                                color = resolvedContentColor,
-                                maxLines = 1,
-                            )
-                        }
+                                else R.string.ax_dynamic_bar_play,
+                            ),
+                            tint = resolvedContentColor,
+                            modifier = Modifier.size(ActionIconSize),
+                        )
                     }
                 }
+                Spacer(Modifier.width(SpaceXxs))
+                ActionButton(
+                    icon = ActionIcon.SKIP_NEXT,
+                    color = resolvedContentColor,
+                    bgColor = lerp(accent, resolvedContentColor, AlphaSubtle),
+                    onClick = { viewModel.skipNext() },
+                    size = ActionSize,
+                    iconSize = ActionIconSize,
+                )
             } else if (event is IslandEvent.Sports && event.team2Name.isNotEmpty()) {
                 SportsChipTeamBadge(event.team1Name, event.team1Icon, resolvedContentColor)
                 Spacer(Modifier.width(SpaceXs))
                 Text(
                     if (event.score1.isNotEmpty()) "${event.score1} - ${event.score2}"
                         else stringResource(R.string.ax_dynamic_bar_sports_vs),
-                    style = PillPrimary,
+                    style = StatusBarChipPrimaryStyle,
                     color = resolvedContentColor,
                     maxLines = 1,
                 )
@@ -793,11 +553,11 @@ private fun KeyguardChipBody(
                             )
                             Text(
                                 secondary,
-                                style = CompactPillSecondaryStyle(),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = resolvedContentColor.copy(alpha = AlphaSecondary),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 92.dp),
+                                modifier = Modifier.widthIn(max = 80.dp),
                             )
                         }
                     }
@@ -813,8 +573,7 @@ private fun KeyguardChipBody(
                         ActionButton(
                             icon = action.icon,
                             color = resolvedContentColor,
-                            bgColor = genericActionBg,
-                            borderColor = genericActionBorder,
+                            bgColor = lerp(accent, resolvedContentColor, AlphaSubtle),
                             onClick = { action.perform(viewModel, event, context) },
                             size = ActionSize,
                             iconSize = ActionIconSize,
@@ -823,77 +582,65 @@ private fun KeyguardChipBody(
                 }
             }
 
-            if (eventCount > 1 && event !is IslandEvent.Media) {
+            if (eventCount > 1) {
                 Spacer(Modifier.width(SpaceXs))
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .height(CountBadgeHeight + 2.dp)
-                        .widthIn(min = CountBadgeHeight + 2.dp)
-                        .background(mediaBadgeBg, ShapeChip)
+                        .height(CountBadgeHeight)
+                        .widthIn(min = CountBadgeHeight)
+                        .background(lerp(accent, contentColor, AlphaDisabled), ShapeChip)
                         .padding(horizontal = SpaceXxs),
                 ) {
                     Text(
                         "$eventCount",
-                        style = CompactPillBadgeStyle(),
+                        style = StatusBarChipBadgeStyle,
                         color = resolvedContentColor,
                         maxLines = 1,
                     )
                 }
             }
+        }
+
+        if (progress != null && event is IslandEvent.Media) {
+            Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.BottomCenter) {
+                AndroidView(
+                    factory = { ctx ->
+                        android.widget.SeekBar(ctx).apply {
+                            max = 10_000
+                            splitTrack = false
+                            setPadding(0, 0, 0, 0)
+                            isEnabled = false
+                            thumb = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+                            val squiggle = com.android.systemui.media.controls.ui.drawable.SquigglyProgress().apply {
+                                waveLength = ctx.resources.getDimensionPixelSize(com.android.systemui.res.R.dimen.qs_media_seekbar_progress_wavelength).toFloat()
+                                lineAmplitude = ctx.resources.getDimensionPixelSize(com.android.systemui.res.R.dimen.qs_media_seekbar_progress_amplitude).toFloat()
+                                phaseSpeed = ctx.resources.getDimensionPixelSize(com.android.systemui.res.R.dimen.qs_media_seekbar_progress_phase).toFloat()
+                                strokeWidth = 3.5.dp.value * ctx.resources.displayMetrics.density
+                                setTint(Color.White.copy(alpha = 0.9f).toArgb()) // Use bright white for maximum visibility
+                                drawRemainingLine = false
+                                transitionEnabled = false
+                                animate = false
+                            }
+                            progressDrawable = squiggle
+                        }
+                    },
+                    update = { bar ->
+                        bar.progress = (progress * 10_000).toInt()
+                        val squiggle = bar.progressDrawable as? com.android.systemui.media.controls.ui.drawable.SquigglyProgress
+                        squiggle?.animate = event.isPlaying
+                        squiggle?.setTint(Color.White.copy(alpha = 0.9f).toArgb())
+                        
+                        val trackAlphaArgb = accent.copy(alpha = AlphaSubtle).toArgb()
+                        val layer = bar.progressDrawable as? LayerDrawable
+                        layer?.findDrawableByLayerId(android.R.id.background)?.setTint(trackAlphaArgb)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(16.dp).padding(horizontal = SpaceSm)
+                )
             }
         }
     }
 }
-
-@Composable
-private fun CompactMediaControlButton(
-    icon: ActionIcon,
-    color: Color,
-    onClick: () -> Unit,
-    size: Dp,
-    iconSize: Dp,
-) {
-    val imageVector = when (icon) {
-        ActionIcon.PLAY -> Icons.Filled.PlayArrow
-        ActionIcon.PAUSE -> Icons.Filled.Pause
-        ActionIcon.STOP -> Icons.Filled.Stop
-        ActionIcon.SKIP_PREV -> Icons.Filled.SkipPrevious
-        ActionIcon.SKIP_NEXT -> Icons.Filled.SkipNext
-    }
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector,
-            contentDescription = icon.name,
-            tint = color,
-            modifier = Modifier.size(iconSize),
-        )
-    }
-}
-
-@Composable
-private fun CompactPillPrimaryStyle(): TextStyle = PillPrimary.copy(fontSize = 10.5.sp)
-
-@Composable
-private fun CompactMediaPrimaryStyle(): TextStyle = PillPrimary.copy(fontSize = 10.8.sp)
-
-@Composable
-private fun CompactMediaSecondaryStyle(): TextStyle =
-    MaterialTheme.typography.labelSmall.copy(fontSize = 9.2.sp)
-
-@Composable
-private fun CompactPillSecondaryStyle(): TextStyle =
-    MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp)
-
-@Composable
-private fun CompactPillBadgeStyle(): TextStyle =
-    MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
 
 @Composable
 private fun KeyguardBatteryChip(
@@ -1114,13 +861,7 @@ private fun KeyguardPrimaryText(event: IslandEvent, color: Color, modifier: Modi
             else MarqueeText(event.label.ifEmpty { stringResource(R.string.ax_dynamic_bar_timer) }, color, modifier)
         }
         is IslandEvent.Stopwatch -> StopwatchTimeText(event, color, modifier)
-        is IslandEvent.Notification -> MarqueeText(
-            event.title ?: event.appName,
-            color,
-            modifier,
-            style = CompactPillPrimaryStyle(),
-            maxWidth = 112.dp,
-        )
+        is IslandEvent.Notification -> MarqueeText(event.title ?: event.appName, color, modifier)
         is IslandEvent.Charging -> MarqueeText("${event.level}%", color, modifier)
         is IslandEvent.Bluetooth -> MarqueeText(event.deviceName.take(12), color, modifier)
         is IslandEvent.Hotspot -> {
@@ -1146,20 +887,8 @@ private fun KeyguardPrimaryText(event: IslandEvent, color: Color, modifier: Modi
         is IslandEvent.Clipboard -> MarqueeText(
             event.preview.ifEmpty { stringResource(R.string.ax_dynamic_bar_copied) }, color, modifier,
         )
-        is IslandEvent.BiometricUnlock -> MarqueeText(
-            stringResource(R.string.ax_dynamic_bar_unlocked),
-            color,
-            modifier,
-            style = CompactPillPrimaryStyle(),
-            maxWidth = 116.dp,
-        )
-        is IslandEvent.AppSwitch -> MarqueeText(
-            stringResource(R.string.ax_dynamic_bar_recents),
-            color,
-            modifier,
-            style = CompactPillPrimaryStyle(),
-            maxWidth = 116.dp,
-        )
+        is IslandEvent.BiometricUnlock -> MarqueeText(stringResource(R.string.ax_dynamic_bar_unlocked), color, modifier)
+        is IslandEvent.AppSwitch -> MarqueeText(stringResource(R.string.ax_dynamic_bar_recents), color, modifier)
         is IslandEvent.MicCamActive -> MarqueeText(
             event.appName.ifEmpty {
                 buildString {
@@ -1171,11 +900,7 @@ private fun KeyguardPrimaryText(event: IslandEvent, color: Color, modifier: Modi
             color, modifier,
         )
         is IslandEvent.PromotedOngoing -> MarqueeText(
-            event.shortText.ifEmpty { event.title.ifEmpty { event.appName } },
-            color,
-            modifier,
-            style = CompactPillPrimaryStyle(),
-            maxWidth = 112.dp,
+            event.shortText.ifEmpty { event.title.ifEmpty { event.appName } }, color, modifier,
         )
         is IslandEvent.Sports -> MarqueeText(
             "${event.score1}-${event.score2}", color, modifier,
@@ -1183,13 +908,7 @@ private fun KeyguardPrimaryText(event: IslandEvent, color: Color, modifier: Modi
         is IslandEvent.NowPlaying -> MarqueeText(
             "${event.songTitle} · ${event.artist}".trimEnd(' ', '·', ' '), color, modifier,
         )
-        is IslandEvent.KeyguardIndication -> MarqueeText(
-            event.text,
-            color,
-            modifier,
-            style = CompactPillPrimaryStyle(),
-            maxWidth = 116.dp,
-        )
+        is IslandEvent.KeyguardIndication -> MarqueeText(event.text, color, modifier)
     }
 }
 
@@ -1347,7 +1066,6 @@ private fun ActionButton(
     icon: ActionIcon,
     color: Color,
     bgColor: Color,
-    borderColor: Color = Color.Transparent,
     onClick: () -> Unit,
     size: Dp = ActionSize,
     iconSize: Dp = ActionIconSize,
@@ -1364,7 +1082,6 @@ private fun ActionButton(
         modifier = Modifier.size(size),
         shape = CircleShape,
         color = bgColor,
-        border = BorderStroke(1.dp, borderColor),
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(size)) {
             Icon(
@@ -1378,20 +1095,14 @@ private fun ActionButton(
 }
 
 @Composable
-private fun MarqueeText(
-    text: String,
-    color: Color,
-    modifier: Modifier,
-    style: TextStyle = PillPrimary,
-    maxWidth: Dp = 140.dp,
-) {
+private fun MarqueeText(text: String, color: Color, modifier: Modifier) {
     Text(
         text,
         color = color,
-        style = style,
+        style = PillPrimary,
         maxLines = 1,
         overflow = TextOverflow.Clip,
-        modifier = modifier.widthIn(max = maxWidth).basicMarquee(iterations = 1),
+        modifier = modifier.widthIn(max = 120.dp).basicMarquee(iterations = 1),
     )
 }
 
