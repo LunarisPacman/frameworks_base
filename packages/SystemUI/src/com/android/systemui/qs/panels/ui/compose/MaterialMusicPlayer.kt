@@ -20,20 +20,15 @@ import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.view.KeyEvent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -42,7 +37,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +57,12 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import com.android.settingslib.media.MediaOutputConstants
+import com.android.systemui.Dependency
+import com.android.systemui.axdynamicbar.ui.compose.AudioWaveform
+import com.android.systemui.media.dialog.MediaOutputDialogReceiver
+import com.android.systemui.statusbar.NotificationLockscreenUserManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -72,7 +72,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -83,55 +82,54 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+import kotlinx.coroutines.withContext
+import androidx.palette.graphics.Palette
+import androidx.compose.runtime.produceState
+import androidx.core.graphics.ColorUtils
+import androidx.compose.ui.graphics.toArgb
+import kotlinx.coroutines.Dispatchers
+
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CustomColorScheme
 
 @Composable
 fun MaterialMusicPlayer(modifier: Modifier = Modifier) {
     val mediaState = rememberMediaState()
-    MaterialMusicPlayerContent(mediaState = mediaState, modifier = modifier)
+    val lockscreenUserManager = remember { Dependency.get(NotificationLockscreenUserManager::class.java) }
+
+    MaterialMusicPlayerContent(
+        mediaState = mediaState,
+        lockscreenUserManager = lockscreenUserManager,
+        modifier = modifier
+    )
 }
 
 @Composable
-private fun EqualizerBars(isPlaying: Boolean, color: Color, modifier: Modifier = Modifier) {
-    val inf = rememberInfiniteTransition(label = "eq")
-    val h1 by inf.animateFloat(
-        initialValue = 0.30f, targetValue = 1.00f,
-        animationSpec = infiniteRepeatable(tween(600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "b1"
-    )
-    val h2 by inf.animateFloat(
-        initialValue = 0.80f, targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "b2"
-    )
-    val h3 by inf.animateFloat(
-        initialValue = 0.50f, targetValue = 0.90f,
-        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "b3"
-    )
-    val alpha by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = tween(300),
-        label = "eq_alpha"
-    )
-    Row(
-        modifier = modifier
-            .graphicsLayer { this.alpha = alpha }
-            .height(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        listOf(h1, h2, h3).forEach { h ->
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .fillMaxHeight(h)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(color)
-            )
+private fun rememberAccentColor(bitmap: android.graphics.Bitmap?): Color {
+    val defaultAccent = Color.White
+    val accent by produceState(defaultAccent, bitmap) {
+        if (bitmap == null) {
+            value = defaultAccent
+            return@produceState
         }
+        val palette = withContext(Dispatchers.Default) {
+            try { Palette.from(bitmap).generate() } catch (_: Exception) { null }
+        }
+        val rawColor = palette?.let { p ->
+            val swatch = p.vibrantSwatch ?: p.lightVibrantSwatch ?: p.mutedSwatch ?: p.dominantSwatch
+            swatch?.let { Color(it.rgb) }
+        } ?: defaultAccent
+        
+        // Ensure contrast on black background
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(rawColor.toArgb(), hsl)
+        if (hsl[2] < 0.4f) {
+            hsl[2] = 0.4f
+        }
+        value = Color(ColorUtils.HSLToColor(hsl))
     }
+    return accent
 }
+
 
 @Composable
 private fun SkipButton(
@@ -162,10 +160,13 @@ private fun SkipButton(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: Modifier = Modifier) {
+private fun MaterialMusicPlayerContent(
+    mediaState: SharedMediaState,
+    lockscreenUserManager: NotificationLockscreenUserManager,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
-    val tileColor = CustomColorScheme.current.qsTileColor
-
+    
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var deviceType by remember { mutableStateOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) }
     DisposableEffect(audioManager) {
@@ -203,16 +204,8 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
         label = "playScale"
     )
 
-    val accentColor by animateColorAsState(
-        targetValue = if (localIsPlaying) MaterialTheme.colorScheme.primaryContainer
-                      else MaterialTheme.colorScheme.surfaceContainerHighest,
-        animationSpec = tween(400), label = "accent"
-    )
-    val onAccentColor by animateColorAsState(
-        targetValue = if (localIsPlaying) MaterialTheme.colorScheme.onPrimaryContainer
-                      else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(400), label = "onAccent"
-    )
+    val accentColor = rememberAccentColor(mediaState.albumArt)
+    val onAccentColor = if (ColorUtils.calculateLuminance(accentColor.toArgb()) > 0.4) Color.Black else Color.White
 
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onVariant = MaterialTheme.colorScheme.onSurfaceVariant
@@ -221,7 +214,8 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
         modifier = modifier
             .fillMaxSize()
             .clip(RoundedCornerShape(28.dp))
-            .background(tileColor),
+            .background(Color.Black)
+            .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(28.dp))
     ) {
         mediaState.albumArt?.let { bmp ->
             Image(
@@ -246,7 +240,16 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(),
+                        enabled = mediaState.controller != null,
+                        onClick = {
+                            try { mediaState.controller?.sessionActivity?.send() } catch (_: Exception) {}
+                        }
+                    )
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -271,27 +274,38 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                EqualizerBars(
-                    localIsPlaying,
-                    if (mediaState.albumArt != null) Color.White
-                    else MaterialTheme.colorScheme.primary,
-                    Modifier.padding(end = 6.dp)
-                )
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (mediaState.albumArt != null) Color.Black.copy(alpha = 0.3f)
+                            if (mediaState.albumArt != null) Color.White.copy(alpha = 0.15f)
                             else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
                         )
+                        .clickable(enabled = mediaState.controller != null) {
+                            val pkg = mediaState.packageName ?: return@clickable
+                            val intent = android.content.Intent(com.android.settingslib.media.MediaOutputConstants.ACTION_LAUNCH_MEDIA_OUTPUT_DIALOG).apply {
+                                putExtra(com.android.settingslib.media.MediaOutputConstants.EXTRA_PACKAGE_NAME, pkg)
+                                component = android.content.ComponentName("com.android.systemui", com.android.systemui.media.dialog.MediaOutputDialogReceiver::class.java.name)
+                            }
+                            context.sendBroadcast(intent)
+                        }
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        deviceIcon, "Audio output",
-                        tint = if (mediaState.albumArt != null) Color.White.copy(alpha = 0.8f) else onVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (localIsPlaying) {
+                            AudioWaveform(
+                                color = Color.White,
+                                isPlaying = true,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                        }
+                        Icon(
+                            deviceIcon, "Audio output",
+                            tint = if (mediaState.albumArt != null) Color.White.copy(alpha = 0.8f) else onVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
 
@@ -300,7 +314,7 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val controlTint = if (mediaState.albumArt != null) Color.White else onSurface
+                val controlTint = if (mediaState.albumArt != null) accentColor else onSurface
                 val controlTintDisabled = controlTint.copy(alpha = 0.38f)
 
                 SkipButton(
@@ -334,8 +348,8 @@ private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: M
                                 localIsPlaying = true
                                 ctrl.transportControls.play()
                                 val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                                am?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
-                                am?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+                                am?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+                                am?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
                             }
                         },
                     contentAlignment = Alignment.Center,
