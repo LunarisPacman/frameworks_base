@@ -16,7 +16,15 @@
 
 package com.android.systemui.qs.panels.ui.compose
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.ComponentName
+import android.content.Intent
+import android.graphics.Bitmap
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -31,6 +39,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -80,17 +89,45 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+import com.android.settingslib.media.MediaOutputConstants
+
+import com.android.systemui.ActivityIntentHelper
+import com.android.systemui.Dependency
+import com.android.systemui.media.dialog.MediaOutputDialogReceiver
+import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.CustomColorScheme
+import com.android.systemui.statusbar.NotificationLockscreenUserManager
+import com.android.systemui.statusbar.policy.KeyguardStateController
 
 @Composable
 fun IosMusicPlayer(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val keyguardStateController = remember { Dependency.get(KeyguardStateController::class.java) }
+    val activityIntentHelper = remember { ActivityIntentHelper(context) }
+    val activityStarter = remember { Dependency.get(ActivityStarter::class.java) }
+    val lockscreenUserManager = remember { Dependency.get(NotificationLockscreenUserManager::class.java) }
+
     val mediaState = rememberMediaState()
-    IosMusicPlayerContent(mediaState = mediaState, modifier = modifier)
+    IosMusicPlayerContent(
+        mediaState = mediaState,
+        activityStarter = activityStarter,
+        keyguardStateController = keyguardStateController,
+        activityIntentHelper = activityIntentHelper,
+        lockscreenUserManager = lockscreenUserManager,
+        modifier = modifier
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun IosMusicPlayerContent(mediaState: SharedMediaState, modifier: Modifier = Modifier) {
+private fun IosMusicPlayerContent(
+    mediaState: SharedMediaState,
+    activityStarter: ActivityStarter,
+    keyguardStateController: KeyguardStateController,
+    activityIntentHelper: ActivityIntentHelper,
+    lockscreenUserManager: NotificationLockscreenUserManager,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -201,7 +238,37 @@ private fun IosMusicPlayerContent(mediaState: SharedMediaState, modifier: Modifi
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable(enabled = mediaState?.controller != null) {
+                    val pkg = mediaState?.controller?.packageName ?: return@clickable
+                    val pending = mediaState?.controller?.sessionActivity ?: context.packageManager
+                        .getLaunchIntentForPackage(pkg)
+                        ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        ?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE) }
+                        ?: return@clickable
+
+                    val showOverLockscreen = keyguardStateController.isShowing &&
+                        activityIntentHelper.wouldPendingShowOverLockscreen(
+                            pending,
+                            lockscreenUserManager.currentUserId
+                        )
+
+                    if (showOverLockscreen) {
+                        activityStarter.startPendingIntentMaybeDismissingKeyguard(
+                            pending,
+                            /* dismissShade = */ true,
+                            /* intentSentUiThreadCallback = */ null,
+                            /* animationController = */ null,
+                            /* fillIntent = */ null,
+                            /* extraOptions = */ null,
+                            /* customMessage = */ null
+                        )
+                    } else {
+                        activityStarter.postStartActivityDismissingKeyguard(pending, null)
+                    }
+                }
+            ) {
                 if (mediaState.albumArt != null) {
                     Image(
                         painter = BitmapPainter(mediaState.albumArt.asImageBitmap()),
@@ -261,6 +328,16 @@ private fun IosMusicPlayerContent(mediaState: SharedMediaState, modifier: Modifi
                             if (hasMedia) Color.Black.copy(alpha = 0.3f)
                             else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
                         )
+                        .clickable(true) {
+                            val pkg = mediaState?.controller?.packageName ?: return@clickable
+                            val intent = Intent(MediaOutputConstants.ACTION_LAUNCH_MEDIA_OUTPUT_DIALOG).apply {
+                                    putExtra(MediaOutputConstants.EXTRA_PACKAGE_NAME, pkg)
+                                    component = ComponentName("com.android.systemui", MediaOutputDialogReceiver::class.java.name)
+                                }
+                            if (pkg != null) {
+                                context.sendBroadcast(intent)
+                            }
+                        }
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
