@@ -191,18 +191,14 @@ private fun SkipButton(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-<<<<<<< HEAD
-private fun MaterialMusicPlayerContent(mediaState: SharedMediaState, modifier: Modifier = Modifier) {
-=======
 private fun MaterialMusicPlayerContent(
-    mediaState: MediaState, 
+    mediaState: SharedMediaState,
     keyguardStateController: KeyguardStateController,
     activityStarter: ActivityStarter,
     activityIntentHelper: ActivityIntentHelper,
     lockscreenUserManager: NotificationLockscreenUserManager,
     modifier: Modifier = Modifier
 ) {
->>>>>>> 6a72b3787d99 (SystemUI: Restore launch and routing functionality for QS widgets)
     val context = LocalContext.current
     val tileColor = CustomColorScheme.current.qsTileColor
 
