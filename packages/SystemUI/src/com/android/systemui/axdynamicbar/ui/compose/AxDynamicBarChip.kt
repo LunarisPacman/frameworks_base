@@ -10,8 +10,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.SizeTransform
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -27,6 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,6 +106,7 @@ fun AxDynamicBarChip(
     val expandableController = rememberExpandableController(color = Color.Transparent, shape = ChipShape)
 
     val motionScheme = MaterialTheme.motionScheme
+    var swipeDirection by remember { mutableIntStateOf(0) }
 
     AnimatedVisibility(
         visible = state != null && (ignoreKeyguard || !isOnKeyguard),
@@ -114,6 +123,7 @@ fun AxDynamicBarChip(
                     val startY = down.position.y
                     var dragging = false
                     var totalDx = 0f
+                    var totalDy = 0f
                     var decided = false 
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -122,8 +132,14 @@ fun AxDynamicBarChip(
                             
                             if (dragging) {
                                 change.consume()
-                                if (totalDx > 0) viewModel.cyclePrev()
-                                else viewModel.cycleNext()
+                                val majorDrag = if (abs(totalDx) > abs(totalDy)) totalDx else totalDy
+                                if (majorDrag > 0) {
+                                    swipeDirection = 1
+                                    viewModel.cyclePrev()
+                                } else {
+                                    swipeDirection = -1
+                                    viewModel.cycleNext()
+                                }
                             } else if (!decided) {
 
                                 change.consume()
@@ -142,19 +158,14 @@ fun AxDynamicBarChip(
                         val dx = change.position.x - startX
                         val dy = change.position.y - startY
                         if (!decided && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
-                            if (abs(dx) >= abs(dy)) {
-                                
-                                decided = true
-                                dragging = true
-                                totalDx = dx
-                                change.consume()
-                            } else {
-                                
-                                decided = true
-                                break
-                            }
+                            decided = true
+                            dragging = true
+                            totalDx = dx
+                            totalDy = dy
+                            change.consume()
                         } else if (dragging) {
                             totalDx = dx
+                            totalDy = dy
                             change.consume()
                         }
                     }
@@ -180,29 +191,33 @@ fun AxDynamicBarChip(
                 AnimatedContent(
                     targetState = chipDisplayKey(displayEvent, isAlert),
                     transitionSpec = {
-                        ((
-                            fadeIn(motionScheme.defaultEffectsSpec()) +
-                                scaleIn(
-                                    initialScale = 0.92f,
-                                    animationSpec = motionScheme.defaultSpatialSpec(),
-                                )
-                            ) togetherWith (
-                            fadeOut(motionScheme.fastEffectsSpec()) +
-                                scaleOut(
-                                    targetScale = 0.92f,
-                                    animationSpec = motionScheme.fastSpatialSpec(),
-                                )
-                            ))
-                            .using(sizeTransform = null)
+                        val isNext = swipeDirection <= 0
+                        if (isNext) {
+                            (slideInVertically(motionScheme.defaultSpatialSpec()) { it } + 
+                                fadeIn(motionScheme.defaultEffectsSpec()) + 
+                                scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec()))
+                            .togetherWith(
+                                slideOutVertically(motionScheme.fastSpatialSpec()) { -it / 2 } + 
+                                fadeOut(motionScheme.fastEffectsSpec()) + 
+                                scaleOut(targetScale = 0.92f, animationSpec = motionScheme.fastSpatialSpec())
+                            )
+                        } else {
+                            (slideInVertically(motionScheme.defaultSpatialSpec()) { -it } + 
+                                fadeIn(motionScheme.defaultEffectsSpec()) + 
+                                scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec()))
+                            .togetherWith(
+                                slideOutVertically(motionScheme.fastSpatialSpec()) { it / 2 } + 
+                                fadeOut(motionScheme.fastEffectsSpec()) + 
+                                scaleOut(targetScale = 0.92f, animationSpec = motionScheme.fastSpatialSpec())
+                            )
+                        }.using(SizeTransform(clip = false))
                     },
                     label = "chip_event",
                 ) {
                     val event = displayEvent
                     val rawAccent = chipAccentColorFor(event)
-                    val accent by animateColorAsState(rawAccent, MaterialTheme.motionScheme.fastEffectsSpec(), label = "accent")
-                    val contentColor by animateColorAsState(
-                        chipContentColorOn(rawAccent), MaterialTheme.motionScheme.fastEffectsSpec(), label = "content",
-                    )
+                    val accent = Color.Black
+                    val contentColor = Color.White
                     val progress = chipProgressFor(event)
 
                 Box(
@@ -214,11 +229,12 @@ fun AxDynamicBarChip(
                             Modifier.height(ChipHeight)
                                 .widthIn(max = 100.dp)
                                 .clip(ChipShape)
-                                .background(accent)
+                                .background(Color.Black)
+                                .border(0.5.dp, Color.White.copy(alpha = 0.5f), ChipShape)
                                 .then(
                                     if (progress != null) {
-                                        val trackColor = lerp(accent, contentColor, 0.2f)
-                                        val fillColor = lerp(accent, contentColor, 0.6f)
+                                        val trackColor = Color.White.copy(alpha = 0.2f)
+                                        val fillColor = Color.White.copy(alpha = 0.8f)
                                         Modifier.drawWithContent {
                                             drawContent()
                                             val barH = 2.dp.toPx()
@@ -236,7 +252,7 @@ fun AxDynamicBarChip(
                                         }
                                     } else Modifier
                                 )
-                                .padding(start = SpaceSm, end = SpaceMd),
+                                .padding(start = 10.dp, end = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (carrierName != null) {
@@ -271,7 +287,7 @@ fun AxDynamicBarChip(
                                             contentDescription = null,
                                             modifier =
                                                 Modifier.size(16.dp)
-                                                    .clip(ShapeXs),
+                                                    .clip(CircleShape),
                                             contentScale = ContentScale.Crop,
                                         )
                                         Spacer(Modifier.width(SpaceXs))
@@ -309,7 +325,7 @@ fun AxDynamicBarChip(
                                 },
                                 label = "chip_icon",
                             ) {
-                                PillEventIcon(event, tint = contentColor, animated = false)
+                                PillEventIcon(event, tint = contentColor, animated = true)
                             }
                             Spacer(Modifier.width(SpaceXs))
                             AnimatedContent(
