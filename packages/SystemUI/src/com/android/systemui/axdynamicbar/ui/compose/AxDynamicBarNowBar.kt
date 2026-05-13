@@ -18,8 +18,10 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -38,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,13 +51,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.android.systemui.axdynamicbar.model.IslandEvent
 import com.android.systemui.axdynamicbar.shared.AlphaHint
 import com.android.systemui.axdynamicbar.shared.AlphaTrack
@@ -68,6 +75,7 @@ import com.android.systemui.axdynamicbar.shared.chipProgressFor
 import com.android.systemui.axdynamicbar.shared.iconKeyFor
 import com.android.systemui.axdynamicbar.shared.textKeyFor
 import com.android.systemui.axdynamicbar.shared.toScaledBitmap
+import com.android.systemui.axdynamicbar.shared.SizeIconSm
 import com.android.systemui.axdynamicbar.ui.AxDynamicBarChipState
 import com.android.systemui.axdynamicbar.ui.AxDynamicBarChipViewModel
 import kotlin.math.abs
@@ -82,6 +90,8 @@ fun AxDynamicBarNowBar(
     state: AxDynamicBarChipState?,
     viewModel: AxDynamicBarChipViewModel,
 ) {
+    val haptic = LocalHapticFeedback.current
+    var swipeDirection by remember { mutableIntStateOf(0) }
     val touchSlop = LocalViewConfiguration.current.touchSlop
     val motionScheme = MaterialTheme.motionScheme
 
@@ -97,8 +107,26 @@ fun AxDynamicBarNowBar(
             AnimatedContent(
                 targetState = NowBarDisplay(displayEvent, isAlert),
                 transitionSpec = {
-                    (fadeIn(motionScheme.defaultEffectsSpec()) + scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec())) togetherWith
-                        (fadeOut(motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.92f, animationSpec = motionScheme.fastSpatialSpec()))
+                    val isNext = swipeDirection <= 0
+                    if (isNext) {
+                        (slideInVertically(motionScheme.defaultSpatialSpec()) { it } + 
+                            fadeIn(motionScheme.defaultEffectsSpec()) + 
+                            scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec()))
+                        .togetherWith(
+                            slideOutVertically(motionScheme.fastSpatialSpec()) { -it / 2 } + 
+                            fadeOut(motionScheme.fastEffectsSpec()) + 
+                            scaleOut(targetScale = 0.92f, animationSpec = motionScheme.fastSpatialSpec())
+                        )
+                    } else {
+                        (slideInVertically(motionScheme.defaultSpatialSpec()) { -it } + 
+                            fadeIn(motionScheme.defaultEffectsSpec()) + 
+                            scaleIn(initialScale = 0.92f, animationSpec = motionScheme.defaultSpatialSpec()))
+                        .togetherWith(
+                            slideOutVertically(motionScheme.fastSpatialSpec()) { it / 2 } + 
+                            fadeOut(motionScheme.fastEffectsSpec()) + 
+                            scaleOut(targetScale = 0.92f, animationSpec = motionScheme.fastSpatialSpec())
+                        )
+                    }.using(SizeTransform(clip = false))
                 },
                 contentKey = { if (it.isAlert) "alert" else it.event::class.simpleName },
                 label = "nowbar_event",
@@ -110,9 +138,7 @@ fun AxDynamicBarNowBar(
 
                 val rawAccent = chipAccentColorFor(display.event)
                 val accent by animateColorAsState(rawAccent, MaterialTheme.motionScheme.fastEffectsSpec(), label = "accent")
-                val contentColor by animateColorAsState(
-                    chipContentColorOn(rawAccent), MaterialTheme.motionScheme.fastEffectsSpec(), label = "content",
-                )
+                val contentColor = Color.White
                 val rawProgress = chipProgressFor(display.event)
                 val progressTarget = rawProgress ?: 0f
                 val progressAnim = remember { Animatable(progressTarget) }
@@ -132,6 +158,7 @@ fun AxDynamicBarNowBar(
                             awaitEachGesture {
                                 awaitFirstDown(requireUnconsumed = false)
                                 var totalDragX = 0f
+                                var totalDragY = 0f
                                 var isDragging = false
 
                                 while (true) {
@@ -139,10 +166,17 @@ fun AxDynamicBarNowBar(
                                     val change = event.changes.firstOrNull() ?: break
 
                                     if (!change.pressed) {
-                                        change.consume()
                                         if (isDragging) {
-                                            if (totalDragX > 0f) viewModel.cyclePrev()
-                                            else viewModel.cycleNext()
+                                            change.consume()
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            val majorDrag = if (abs(totalDragX) > abs(totalDragY)) totalDragX else totalDragY
+                                            if (majorDrag > 0) {
+                                                swipeDirection = 1
+                                                viewModel.cyclePrev()
+                                            } else {
+                                                swipeDirection = -1
+                                                viewModel.cycleNext()
+                                            }
                                         } else {
                                             viewModel.statusBarExpansion.toggle()
                                         }
@@ -151,8 +185,9 @@ fun AxDynamicBarNowBar(
 
                                     val delta = change.positionChange()
                                     totalDragX += delta.x
+                                    totalDragY += delta.y
 
-                                    if (!isDragging && abs(totalDragX) > touchSlop) {
+                                    if (!isDragging && (abs(totalDragX) > touchSlop || abs(totalDragY) > touchSlop)) {
                                         isDragging = true
                                     }
 
@@ -176,7 +211,8 @@ fun AxDynamicBarNowBar(
                             }
                             .shadow(6.dp, NowBarShape)
                             .clip(NowBarShape)
-                            .background(accent)
+                            .background(Color.Black)
+                            .border(0.5.dp, Color.White.copy(alpha = 0.8f), NowBarShape)
                             .then(
                                 if (progress != null) {
                                     Modifier.drawWithContent {
@@ -230,7 +266,7 @@ private fun AlertPillContent(event: IslandEvent, contentColor: Color) {
                 Image(
                     bitmap = icon.toScaledBitmap(18.dp),
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)),
+                    modifier = Modifier.size(SizeIconSm).clip(CircleShape),
                     contentScale = ContentScale.Crop,
                 )
                 Spacer(Modifier.width(SpaceSm))
@@ -238,7 +274,7 @@ private fun AlertPillContent(event: IslandEvent, contentColor: Color) {
             Text(
                 text = n.appName ?: "",
                 style = PillPrimary,
-                color = contentColor,
+                color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.basicMarquee(iterations = 1),
@@ -262,7 +298,7 @@ private fun EventPillContent(
         contentKey = { iconKeyFor(it) },
         label = "nowbar_icon",
     ) { e ->
-        PillEventIcon(e, tint = contentColor)
+        PillEventIcon(e, tint = Color.White)
     }
     Spacer(Modifier.width(SpaceSm))
     
@@ -275,7 +311,7 @@ private fun EventPillContent(
         contentKey = { textKeyFor(it) },
         label = "nowbar_text",
     ) { e ->
-        PillEventText(e, Modifier, overrideColor = contentColor)
+        PillEventText(e, Modifier, overrideColor = Color.White)
     }
     if (chipState.eventCount > 1) {
         Spacer(Modifier.width(SpaceSm))
@@ -289,20 +325,19 @@ private fun EventPillContent(
 
 @Composable
 private fun NowBarDots(count: Int, activeIndex: Int, color: Color) {
-    val dotCount = count.coerceAtMost(5)
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Box(
+        modifier = Modifier
+            .size(16.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.2f)),
+        contentAlignment = Alignment.Center,
     ) {
-        for (i in 0 until dotCount) {
-            val active = i == activeIndex.coerceIn(0, dotCount - 1) % dotCount
-            Box(
-                Modifier
-                    .size(if (active) 5.dp else 4.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = if (active) 1f else AlphaHint))
-            )
-        }
+        Text(
+            text = count.toString(),
+            color = color,
+            style = PillPrimary.copy(fontSize = 9.sp),
+            maxLines = 1,
+        )
     }
 }
 

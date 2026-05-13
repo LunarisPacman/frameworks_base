@@ -225,13 +225,7 @@ constructor(
                 dismissedEventIds.removeAll { id -> rawEvents.none { it.id == id } }
                 val events = rawEvents.filter { e ->
                     e.id !in dismissedEventIds &&
-                        
-                        !(onKeyguard && e is IslandEvent.Notification) &&
-                        
-                        !(onKeyguard && e is IslandEvent.Charging) &&
-                        
                         !(onKeyguard && e is IslandEvent.AppSwitch) &&
-                        
                         !(!onKeyguard && e is IslandEvent.KeyguardIndication)
                 }
 
