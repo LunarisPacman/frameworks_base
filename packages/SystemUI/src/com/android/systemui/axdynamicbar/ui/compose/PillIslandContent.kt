@@ -23,6 +23,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -126,7 +129,7 @@ private fun StaticPillEventIcon(event: IslandEvent, tint: Color? = null) {
                 Image(
                     bitmap = event.appIcon.toScaledBitmap(16.dp),
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp).clip(ShapeXs),
+                    modifier = Modifier.size(16.dp).clip(CircleShape),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -326,26 +329,23 @@ private fun AnimatedTrophyIcon(color: Color) {
 
 @Composable
 private fun MediaPillIcon(event: IslandEvent.Media, animated: Boolean = true) {
-    event.albumArt?.let { art ->
-        Image(
-            bitmap = art.toScaledBitmap(16.dp),
-            contentDescription = null,
-            modifier = Modifier.size(16.dp).clip(CircleShape),
-            contentScale = ContentScale.Crop,
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        event.albumArt?.let { art: Drawable ->
+            Image(
+                bitmap = art.toScaledBitmap(16.dp),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp).clip(CircleShape).border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+            Spacer(Modifier.width(SpaceXs))
+        }
+        WaveformAnimation(
+            Color.White,
+            Modifier.size(12.dp, 10.dp),
+            isAnimating = animated && event.isPlaying,
+            barCount = 3,
         )
     }
-        ?: Box(
-            modifier =
-                Modifier.size(16.dp).clip(CircleShape).background(OrangeAccent.copy(alpha = 0.42f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            WaveformAnimation(
-                OrangeAccent,
-                Modifier.size(10.dp),
-                isAnimating = animated && event.isPlaying,
-                barCount = 3,
-            )
-        }
 }
 
 @Composable
@@ -763,7 +763,7 @@ private fun NotificationPillIcon(event: IslandEvent.Notification) {
         Image(
             bitmap = icon.toScaledBitmap(16.dp),
             contentDescription = null,
-            modifier = Modifier.size(16.dp).clip(ShapeXs),
+            modifier = Modifier.size(16.dp).clip(CircleShape),
         )
     } else {
         Icon(Icons.Filled.Notifications, null, tint = BlueAccent, modifier = Modifier.size(SizeBadge))
@@ -792,7 +792,7 @@ private fun PromotedOngoingPillIcon(event: IslandEvent.PromotedOngoing, tint: Co
         Image(
             bitmap = event.appIcon.toScaledBitmap(16.dp),
             contentDescription = null,
-            modifier = Modifier.size(16.dp).clip(ShapeXs),
+            modifier = Modifier.size(16.dp).clip(CircleShape),
             contentScale = ContentScale.Crop,
         )
     } else if (hasProgress) {
@@ -1258,7 +1258,7 @@ private fun AudioRecText(event: IslandEvent.AudioRecording, modifier: Modifier, 
 
 @Composable
 private fun MediaTitleText(event: IslandEvent.Media, modifier: Modifier, overrideColor: Color? = null) {
-    val color = (overrideColor ?: OrangeAccent).copy(
+    val color = (overrideColor ?: Color.White).copy(
         alpha = if (event.isPlaying) 1f else AlphaHint
     )
     val title = event.track.ifEmpty {
@@ -1271,10 +1271,11 @@ private fun MediaTitleText(event: IslandEvent.Media, modifier: Modifier, overrid
         maxLines = 1,
         overflow = TextOverflow.Clip,
         modifier = modifier
-            .widthIn(max = 90.dp)
+            .widthIn(max = 120.dp)
             .basicMarquee(
-                initialDelayMillis = 3_000,
-                repeatDelayMillis = 5_000,
+                iterations = Int.MAX_VALUE,
+                initialDelayMillis = 2_000,
+                repeatDelayMillis = 3_000,
             ),
     )
 }
@@ -1383,29 +1384,33 @@ fun PulsingDot(color: Color, size: Dp = 8.dp, durationMs: Int = 600, minAlpha: F
 
 @Composable
 fun WaveformAnimation(color: Color, modifier: Modifier = Modifier.size(34.dp, 20.dp), isAnimating: Boolean = true, barCount: Int = 4) {
-    val phaseState: State<Float>?
-    if (isAnimating) {
-        val transition = rememberInfiniteTransition(label = "waveform")
-        phaseState =
-            transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 2f * PI.toFloat(),
-                animationSpec =
-                    infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
-                label = "wave_phase",
-            )
-    } else {
-        phaseState = null
-    }
+    val transition = rememberInfiniteTransition(label = "waveform")
+    
+    val phaseState = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * PI.toFloat(),
+        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing), RepeatMode.Restart),
+        label = "wave_phase",
+    )
+
     Canvas(modifier = modifier) {
-        val phase = phaseState?.value ?: 0f
-        val barW = size.width / (barCount * 2.8f)
-        val maxH = size.height * 0.82f
-        val staticH = if (!isAnimating) maxH * 0.35f else 0f
-        val gap = (size.width - barCount * barW) / (barCount + 1)
+        val phase = if (isAnimating) phaseState.value else 0f
+        val barW = size.width / (barCount * 1.8f)
+        val maxH = size.height
+        val gap = (size.width - barCount * barW) / (barCount - 1).coerceAtLeast(1)
+        
         for (i in 0 until barCount) {
-            val x = gap + i * (barW + gap) + barW / 2f
-            val h = if (isAnimating) maxH * (0.22f + 0.78f * ((sin(phase + i * 0.9f) + 1f) / 2f)) else staticH
+            val x = i * (barW + gap) + barW / 2f
+            val factor = when(i % 3) {
+                0 -> 0.7f * sin(phase + i * 0.5f)
+                1 -> 0.9f * sin(phase * 1.3f + i * 0.8f)
+                else -> 0.6f * sin(phase * 0.8f + i * 0.3f)
+            }
+            val h = if (isAnimating) {
+                maxH * (0.3f + 0.7f * ((factor + 1f) / 2f))
+            } else {
+                maxH * 0.4f
+            }
             val y = (size.height - h) / 2f
             drawLine(
                 color = color,
