@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.drawable.Drawable
 import androidx.core.graphics.ColorUtils
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -59,48 +60,48 @@ import kotlinx.coroutines.withContext
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 
-internal val SpaceXxs = 2.dp
-internal val SpaceXs = 4.dp
-internal val SpaceSm = 6.dp
-internal val SpaceMd = 8.dp
-internal val SpaceLg = 12.dp
-internal val SpaceXl = 14.dp
-internal val SpaceXxl = 16.dp
-internal val SpaceSection = 20.dp
-internal val SpacePanel = 24.dp
-internal val SpacePanelLarge = 28.dp
+val SpaceXxs = 2.dp
+val SpaceXs = 4.dp
+val SpaceSm = 6.dp
+val SpaceMd = 8.dp
+val SpaceLg = 12.dp
+val SpaceXl = 14.dp
+val SpaceXxl = 16.dp
+val SpaceSection = 20.dp
+val SpacePanel = 24.dp
+val SpacePanelLarge = 28.dp
 
-internal val ShapeXs = RoundedCornerShape(8.dp)
-internal val ShapeSm = RoundedCornerShape(12.dp)
-internal val ShapeLg = RoundedCornerShape(24.dp)
-internal val ShapeXl = RoundedCornerShape(32.dp)
-internal val ShapeCard = RoundedCornerShape(28.dp)
+val ShapeXs = RoundedCornerShape(8.dp)
+val ShapeSm = RoundedCornerShape(12.dp)
+val ShapeLg = RoundedCornerShape(24.dp)
+val ShapeXl = RoundedCornerShape(32.dp)
+val ShapeCard = RoundedCornerShape(28.dp)
 
-internal val SizeBadge = 14.dp
-internal val SizeIconSm = 20.dp
-internal val SizeIconMd = 28.dp
-internal val SizeButton = 48.dp
-internal val SizeButtonLg = 48.dp
-internal val SizeButtonXl = 64.dp
-internal val SizeAlbumSm = 52.dp
-internal val SizeAlbumLg = 200.dp
-internal val SizeSeekHeight = 16.dp
-internal val SizeProgressHeight = 8.dp
-internal val SizeStrokeWidth = 2.dp
-internal val SizeStrokeThin = 1.5f
-internal val SizeCompactIcon = 40.dp
-internal val SizeActionHeight = 48.dp
+val SizeBadge = 14.dp
+val SizeIconSm = 20.dp
+val SizeIconMd = 28.dp
+val SizeButton = 48.dp
+val SizeButtonLg = 48.dp
+val SizeButtonXl = 64.dp
+val SizeAlbumSm = 52.dp
+val SizeAlbumLg = 200.dp
+val SizeSeekHeight = 16.dp
+val SizeProgressHeight = 8.dp
+val SizeStrokeWidth = 2.dp
+val SizeStrokeThin = 1.5f
+val SizeCompactIcon = 40.dp
+val SizeActionHeight = 48.dp
 
-internal const val AlphaSecondary = 0.7f
-internal const val AlphaTertiary = 0.5f
-internal const val AlphaHint = 0.4f
-internal const val AlphaDisabled = 0.3f
-internal const val AlphaSubtle = 0.15f
-internal const val AlphaFaint = 0.1f
-internal const val AlphaBorder = 0.08f
-internal const val AlphaStatusChip = 0.14f
-internal const val AlphaIconBg = 0.16f
-internal const val AlphaTrack = 0.25f
+const val AlphaSecondary = 0.7f
+const val AlphaTertiary = 0.5f
+const val AlphaHint = 0.4f
+const val AlphaDisabled = 0.3f
+const val AlphaSubtle = 0.15f
+const val AlphaFaint = 0.1f
+const val AlphaBorder = 0.08f
+const val AlphaStatusChip = 0.14f
+const val AlphaIconBg = 0.16f
+const val AlphaTrack = 0.25f
 
 internal val TsBadge: TextStyle
     @Composable get() = MaterialTheme.typography.labelSmall.copy(
@@ -115,18 +116,20 @@ internal val BatteryNeutralColor: Color
     @Composable get() = MaterialTheme.colorScheme.surfaceVariant
 internal val ChipContentDark = Color(0xFF1B1B1B)
 
-internal val RedAccent = Color(0xFFEF5350)
-internal val PinkAccent = Color(0xFFEC407A)
-internal val OrangeAccent = Color(0xFFFFA726)
-internal val YellowAccent = Color(0xFFFFCA28)
-internal val GreenAccent = Color(0xFF66BB6A)
-internal val MintAccent = Color(0xFF26A69A)
-internal val TealAccent = Color(0xFF29B6F6)
-internal val BlueAccent = Color(0xFF42A5F5)
-internal val IndigoAccent = Color(0xFF7E57C2)
-internal val PurpleAccent = Color(0xFFAB47BC)
+internal val RedAccent = Color(0xFFFF3B30)
+internal val PinkAccent = Color(0xFFFF2D55)
+internal val OrangeAccent = Color(0xFFFF9500)
+internal val YellowAccent = Color(0xFFFFCC00)
+internal val GreenAccent = Color(0xFF34C759)
+internal val MintAccent = Color(0xFF63E6BE)
+internal val TealAccent = Color(0xFF5AC8FA)
+internal val BlueAccent = Color(0xFF007AFF)
+internal val IndigoAccent = Color(0xFF5856D6)
+internal val PurpleAccent = Color(0xFFAF52DE)
+internal val MediaDefaultAccent = Color(0xFFAB47BC)
 internal val PausedGray = Color(0xFF8E8E93)
 
+internal val SizeKeyguardMinWidth = 100.dp
 internal val ExpandedMaxWidth = 420.dp
 
 internal val SubtleGray: Color
@@ -384,7 +387,7 @@ internal fun ActionChip(
         onClick = onClick,
         shape = ShapeChip,
         color = bg,
-        modifier = modifier,
+        modifier = modifier.border(1.2.dp, color.copy(alpha = 0.12f), ShapeChip),
     ) {
         Row(
             modifier = Modifier.height(SizeActionHeight).padding(horizontal = SpacePanel),
@@ -412,7 +415,7 @@ internal fun ExpressivePillButton(
         onClick = onClick,
         shape = RoundedCornerShape(percent = 50),
         color = backgroundColor,
-        modifier = modifier,
+        modifier = modifier.border(1.2.dp, contentColor.copy(alpha = 0.12f), RoundedCornerShape(percent = 50)),
     ) {
         Row(
             modifier = Modifier.height(SizeActionHeight).padding(horizontal = SpacePanel),
