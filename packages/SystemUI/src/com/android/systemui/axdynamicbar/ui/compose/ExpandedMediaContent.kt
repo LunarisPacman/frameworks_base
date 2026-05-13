@@ -133,13 +133,13 @@ internal fun MediaCard(event: IslandEvent.Media, interactor: IslandActions) {
                         Image(
                             bitmap = art.toScaledBitmap(AlbumArtSize),
                             contentDescription = null,
-                            modifier = Modifier.size(AlbumArtSize).clip(ShapeLg),
+                            modifier = Modifier.size(AlbumArtSize).clip(CircleShape),
                             contentScale = ContentScale.Crop,
                         )
                     } ?: Box(
                         modifier = Modifier
                             .size(AlbumArtSize)
-                            .clip(ShapeLg)
+                            .clip(CircleShape)
                             .background(accent.copy(alpha = AlphaFaint)),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -171,7 +171,7 @@ internal fun MediaCard(event: IslandEvent.Media, interactor: IslandActions) {
                         Image(
                             bitmap = icon.toScaledBitmap(SizeIconSm),
                             contentDescription = null,
-                            modifier = Modifier.size(SizeIconSm).clip(ShapeXs),
+                            modifier = Modifier.size(SizeIconSm).clip(CircleShape),
                             colorFilter = ColorFilter.tint(OnCardText),
                         )
                     }
@@ -220,12 +220,12 @@ internal fun MediaExpanded(
                 Image(
                     bitmap = art.toScaledBitmap(SizeAlbumSm),
                     contentDescription = null,
-                    modifier = Modifier.size(SizeAlbumSm).clip(ShapeLg),
+                    modifier = Modifier.size(SizeAlbumSm).clip(CircleShape),
                     contentScale = ContentScale.Crop,
                 )
             } ?: Surface(
                 modifier = Modifier.size(SizeAlbumSm),
-                shape = ShapeLg,
+                shape = CircleShape,
                 color = accent.copy(alpha = AlphaSubtle),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -263,7 +263,7 @@ internal fun MediaExpanded(
                 Image(
                     bitmap = icon.toScaledBitmap(SizeIconSm),
                     contentDescription = null,
-                    modifier = Modifier.size(SizeIconSm).clip(ShapeXs),
+                    modifier = Modifier.size(SizeIconSm).clip(CircleShape),
                     colorFilter = ColorFilter.tint(OnCardText),
                 )
             }
@@ -652,7 +652,7 @@ internal fun RowScope.CompactMediaRow(
         Image(
             bitmap = it.toScaledBitmap(SizeCompactIcon),
             null,
-            modifier = Modifier.size(SizeCompactIcon).clip(ShapeCompact),
+            modifier = Modifier.size(SizeCompactIcon).clip(CircleShape),
             contentScale = ContentScale.Crop,
         )
     } ?: run {

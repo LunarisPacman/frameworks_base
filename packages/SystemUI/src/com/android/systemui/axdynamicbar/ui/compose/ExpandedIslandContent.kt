@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.systemui.axdynamicbar.shared.IslandActions
@@ -233,7 +234,14 @@ internal fun PrimaryCard(content: @Composable () -> Unit) {
         modifier =
             Modifier.fillMaxWidth()
                 .clip(ShapeCard)
-                .background(CardBg)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            CardBg,
+                            CardBg.copy(alpha = 0.98f)
+                        )
+                    )
+                )
                 .border(1.dp, CardBorderBrush, ShapeCard)
                 .padding(SpaceXxl)
     ) {

@@ -304,7 +304,7 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
-                                .clip(ShapeLg),
+                                .clip(CircleShape),
                             contentScale = ContentScale.Crop,
                         )
                     } else {
@@ -312,7 +312,7 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
-                                .clip(ShapeLg)
+                                .clip(CircleShape)
                                 .background(colors.tonal),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -339,15 +339,28 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
                 },
                 label = "kg_media_track",
             ) { title ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
                 Text(
                     title,
                     color = Color.White,
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(SpaceMd))
+                WaveformAnimation(
+                    color = Color.White,
+                    modifier = Modifier.size(24.dp, 16.dp),
+                    isAnimating = event.isPlaying,
+                    barCount = 3,
                 )
             }
+        }
 
             if (event.artist.isNotEmpty()) {
                 Spacer(Modifier.height(SpaceMd))
@@ -400,7 +413,7 @@ private fun KeyguardMediaPanel(event: IslandEvent.Media, interactor: IslandActio
                                 Image(
                                     bitmap = icon.toScaledBitmap(SizeIconSm),
                                     contentDescription = null,
-                                    modifier = Modifier.size(SizeIconSm).clip(ShapeXs),
+                                    modifier = Modifier.size(SizeIconSm).clip(CircleShape),
                                     colorFilter = ColorFilter.tint(colors.accent),
                                 )
                             } ?: Icon(
