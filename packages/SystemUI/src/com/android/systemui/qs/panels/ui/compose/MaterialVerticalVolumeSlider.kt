@@ -180,7 +180,7 @@ fun MaterialVerticalVolumeSlider(
     val gradientEnabled = rememberVolumeGradientEnabled()
     val normalGradientColors = if (rememberGradientColorMode() == 1) {
         val g = rememberGradientCustomColors()
-        listOf(g.startColor, g.endColor)
+        listOf(g.first, g.second)
     } else {
         listOf(
             MaterialTheme.colorScheme.primary,
