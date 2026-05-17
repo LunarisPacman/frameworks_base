@@ -59,7 +59,6 @@ import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.tuner.TunerService;
 import com.android.systemui.statusbar.policy.HotspotController;
 import com.android.systemui.statusbar.NotificationLockscreenUserManager;
-import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel;
 import com.android.systemui.statusbar.connectivity.AccessPointController;
 import com.android.systemui.statusbar.connectivity.NetworkController;
@@ -167,7 +166,6 @@ public class Dependency {
     @Inject Lazy<StatusBarWindowControllerStore> mStatusBarWindowControllerStoreLazy;
     @Inject Lazy<SysUIStateDisplaysInteractor> mSysUIStateDisplaysInteractor;
     @Inject Lazy<RotationPolicyWrapper> mRotationPolicyWrapperLazy;
-    @Inject Lazy<ActivityStarter> mActivityStarter;
     @Inject Lazy<AccessPointController> mAccessPointController;
     @Inject Lazy<NetworkController> mNetworkController;
     @Inject Lazy<InternetDialogManager> mInternetDialogManager;
@@ -233,7 +231,6 @@ public class Dependency {
         mProviders.put(ConfigurationController.class, mConfigurationController::get);
         mProviders.put(FlashlightController.class, mFlashlightController::get);
         mProviders.put(BluetoothDetailsContentViewModel.class, mBluetoothDetailsContentViewModel::get);
-        mProviders.put(ActivityStarter.class, mActivityStarter::get);
         mProviders.put(HotspotController.class, mHotspotController::get);
         mProviders.put(NotificationLockscreenUserManager.class, mNotificationLockscreenUserManagerLazy::get);
 
