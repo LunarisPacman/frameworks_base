@@ -143,6 +143,8 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
     private static final String STATUS_BAR_QUICK_QS_PULLDOWN =
             "lineagesystem:" + LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN;
+    private static final String QS_SPLIT_SHADE_SETTING =
+            "system:" + Settings.System.QS_SPLIT_SHADE;
     private static final String NOTIFICATION_ROW_TRANSPARENCY =
             Settings.Secure.NOTIFICATION_ROW_TRANSPARENCY;
     private static final String NOTIFICATION_ROW_TRANSPARENCY_LOCKSCREEN =
@@ -309,6 +311,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     private long mNotificationBoundsAnimationDuration;
 
     private int mOneFingerQuickSettingsIntercept;
+    private boolean mQsSplitShadeEnabledLegacy;
 
     private final Region mInterceptRegion = new Region();
     /** The end bounds of a clipping animation. */
@@ -631,25 +634,37 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         MotionEvent.BUTTON_SECONDARY) || event.isButtonPressed(
                         MotionEvent.BUTTON_TERTIARY));
 
-        final float w = mQs.getView().getMeasuredWidth();
+        final float w = mPanelView != null ? mPanelView.getMeasuredWidth() : (mQs != null && mQs.getView() != null ? mQs.getView().getMeasuredWidth() : 0);
         final float x = event.getX();
         float region = w * 1.f / 4.f; // TODO overlay region fraction?
         boolean showQsOverride = false;
 
-        switch (mOneFingerQuickSettingsIntercept) {
-            case 1: // Right side pulldown
-                showQsOverride = mQs.getView().isLayoutRtl() ? x < region : w - region < x;
-                break;
-            case 2: // Left side pulldown
-                showQsOverride = mQs.getView().isLayoutRtl() ? w - region < x : x < region;
-                break;
-            case 3: // pull down anywhere
-                showQsOverride = true;
-                break;
+        final boolean isRtl = mPanelView != null && mPanelView.isLayoutRtl();
+
+        if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
+            float halfRegion = w * 1.f / 2.f;
+            showQsOverride = isRtl ? x < halfRegion : w - halfRegion < x;
+        } else {
+            switch (mOneFingerQuickSettingsIntercept) {
+                case 1: // Right side pulldown
+                    showQsOverride = isRtl ? x < region : w - region < x;
+                    break;
+                case 2: // Left side pulldown
+                    showQsOverride = isRtl ? w - region < x : x < region;
+                    break;
+                case 3: // pull down anywhere
+                    showQsOverride = true;
+                    break;
+            }
+            showQsOverride &= mBarState == StatusBarState.SHADE;
         }
-        showQsOverride &= mBarState == StatusBarState.SHADE;
 
         return twoFingerDrag || showQsOverride || stylusButtonClickDrag || mouseButtonClickDrag;
+    }
+
+    @Override
+    public boolean getSplitShadeEnabledLegacy() {
+        return mQsSplitShadeEnabledLegacy;
     }
 
     @Override
@@ -734,7 +749,8 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     public boolean shouldQuickSettingsIntercept(float x, float y, float yDiff) {
         boolean keyguardShowing = mBarState == KEYGUARD;
         if (!isExpansionEnabled() || mCollapsedOnDown || (keyguardShowing
-                && mKeyguardBypassController.getBypassEnabled()) || mSplitShadeEnabled) {
+                && mKeyguardBypassController.getBypassEnabled()) || mSplitShadeEnabled
+                || (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE)) {
             return false;
         }
         int headerTop, headerBottom;
@@ -1090,6 +1106,38 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     void updateQsState() {
         if (mQs == null) return;
         mQs.setExpanded(getExpanded());
+
+        if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
+            boolean isQsVisible = getExpanded() || isExpandImmediate();
+            int qsVisibility = isQsVisible ? View.VISIBLE : View.INVISIBLE;
+            int nsslVisibility = isQsVisible ? View.INVISIBLE : View.VISIBLE;
+
+            if (mQsFrame.getVisibility() != qsVisibility) {
+                mQsFrame.setVisibility(qsVisibility);
+            }
+            if (mQs.getView() != null && mQs.getView().getVisibility() != qsVisibility) {
+                mQs.getView().setVisibility(qsVisibility);
+            }
+            if (mQs.getHeader() != null && mQs.getHeader().getVisibility() != qsVisibility) {
+                mQs.getHeader().setVisibility(qsVisibility);
+            }
+            if (mNotificationStackScrollLayoutController.getView().getVisibility() != nsslVisibility) {
+                mNotificationStackScrollLayoutController.getView().setVisibility(nsslVisibility);
+            }
+        } else {
+            if (mQsFrame.getVisibility() != View.VISIBLE) {
+                mQsFrame.setVisibility(View.VISIBLE);
+            }
+            if (mQs.getView() != null && mQs.getView().getVisibility() != View.VISIBLE) {
+                mQs.getView().setVisibility(View.VISIBLE);
+            }
+            if (mQs.getHeader() != null && mQs.getHeader().getVisibility() != View.VISIBLE) {
+                mQs.getHeader().setVisibility(View.VISIBLE);
+            }
+            if (mNotificationStackScrollLayoutController.getView().getVisibility() != View.VISIBLE) {
+                mNotificationStackScrollLayoutController.getView().setVisibility(View.VISIBLE);
+            }
+        }
     }
 
     /** update expanded state of QS */
@@ -1706,12 +1754,19 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
     /** handles touches in Qs panel area */
     boolean handleTouch(MotionEvent event, boolean isFullyCollapsed,
             boolean isShadeOrQsHeightAnimationRunning) {
+        if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
+            if (!isFullyCollapsed) {
+                return false;
+            }
+        }
         boolean isSwipeDisabled = NTForbiddenSwipeDownQSController.get(mPanelView.getContext()).getForbiddenSwipeDownQS();
         if (isSplitShadeAndTouchXOutsideQs(event.getX())) {
             mShadeLog.logMotionEvent(event, "handleQsTouch: touch outside QS");
             return false;
         }
-        boolean isInStatusBar = event.getY(event.getActionIndex()) < mStatusBarMinHeight;
+        float statusBarThreshold = mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE
+                ? mStatusBarMinHeight * 2.0f : mStatusBarMinHeight;
+        boolean isInStatusBar = event.getY(event.getActionIndex()) < statusBarThreshold;
         if (ShadeExpandsOnStatusBarLongPress.isEnabled() && isInStatusBar 
                 && !isSwipeDisabled) {
             mStatusBarLongPressGestureDetector.get().handleTouch(event);
@@ -2352,6 +2407,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             }
             mQs.setScrollListener(mQsScrollListener);
             mTunerService.addTunable(this, STATUS_BAR_QUICK_QS_PULLDOWN);
+            mTunerService.addTunable(this, QS_SPLIT_SHADE_SETTING);
             mTunerService.addTunable(this, NOTIFICATION_ROW_TRANSPARENCY);
             mTunerService.addTunable(this, NOTIFICATION_ROW_TRANSPARENCY_LOCKSCREEN);
             updateExpansion();
@@ -2383,6 +2439,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         public void onTuningChanged(String key, String newValue) {
             if (STATUS_BAR_QUICK_QS_PULLDOWN.equals(key)) {
                 mOneFingerQuickSettingsIntercept = TunerService.parseInteger(newValue, 0);
+            } else if (QS_SPLIT_SHADE_SETTING.equals(key)) {
+                mQsSplitShadeEnabledLegacy = TunerService.parseInteger(newValue, 0) != 0;
+                updateQsState();
             } else if (NOTIFICATION_ROW_TRANSPARENCY.equals(key) ||
                     NOTIFICATION_ROW_TRANSPARENCY_LOCKSCREEN.equals(key)) {
                 updateTransparencyIfNeeded();
