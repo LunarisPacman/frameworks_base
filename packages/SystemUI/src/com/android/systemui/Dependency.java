@@ -59,6 +59,7 @@ import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.tuner.TunerService;
 import com.android.systemui.statusbar.policy.HotspotController;
 import com.android.systemui.statusbar.NotificationLockscreenUserManager;
+import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel;
 import com.android.systemui.statusbar.connectivity.AccessPointController;
 import com.android.systemui.statusbar.connectivity.NetworkController;
@@ -175,6 +176,7 @@ public class Dependency {
     @Inject Lazy<BluetoothDetailsContentViewModel> mBluetoothDetailsContentViewModel;
     @Inject Lazy<HotspotController> mHotspotController;
     @Inject Lazy<NotificationLockscreenUserManager> mNotificationLockscreenUserManagerLazy;
+    @Inject Lazy<ActivityStarter> mActivityStarter;
 
     @Inject
     public Dependency() {
@@ -233,6 +235,7 @@ public class Dependency {
         mProviders.put(BluetoothDetailsContentViewModel.class, mBluetoothDetailsContentViewModel::get);
         mProviders.put(HotspotController.class, mHotspotController::get);
         mProviders.put(NotificationLockscreenUserManager.class, mNotificationLockscreenUserManagerLazy::get);
+        mProviders.put(ActivityStarter.class, mActivityStarter::get);
 
         Dependency.setInstance(this);
     }
