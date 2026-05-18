@@ -1532,6 +1532,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         SceneContainerFlag.assertInLegacyMode();
         float topPadding;
         boolean keyguardShowing = mBarState == KEYGUARD;
+        if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
+            return mQuickQsHeaderHeight;
+        }
         if (mSplitShadeEnabled) {
             return keyguardShowing
                     ? keyguardNotificationStaticPadding : 0;
@@ -2530,7 +2533,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         @Override
         public void onOverscrollTopChanged(float amount, boolean isRubberbanded) {
             // When in split shade, overscroll shouldn't carry through to QS
-            if (mSplitShadeEnabled) {
+            if (mSplitShadeEnabled || (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE)) {
                 return;
             }
             cancelExpansionAnimation();
@@ -2548,7 +2551,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         @Override
         public void flingTopOverscroll(float velocity, boolean open) {
             // in split shade mode we want to expand/collapse QS only when touch happens within QS
-            if (isSplitShadeAndTouchXOutsideQs(mInitialTouchX)) {
+            if (mSplitShadeEnabled || (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE)) {
                 return;
             }
             mLastOverscroll = 0f;
