@@ -1256,6 +1256,9 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             // be larger than 0 because of the timing, leading to flickers.
             return 0.0f;
         }
+        if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
+            return (getExpanded() || isExpandImmediate()) ? 1.0f : 0.0f;
+        }
         return Math.min(
                 1f, (mExpansionHeight - mMinExpansionHeight) / (mMaxExpansionHeight
                         - mMinExpansionHeight));
@@ -1436,7 +1439,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
                         mDisplayRightInset,
                         clipBottom,
                         radius,
-                        qsVisible && !mSplitShadeEnabled,
+                        qsVisible && !mSplitShadeEnabled && !(mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE),
                         mIsFullWidth);
             }
 
@@ -1616,7 +1619,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
     private int calculateTopClippingBound(int qsPanelBottomY) {
         int top;
-        if (mSplitShadeEnabled) {
+        if (mSplitShadeEnabled || (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE)) {
             top = Math.min(qsPanelBottomY, mLargeScreenShadeHeaderHeight);
         } else {
             if (mTransitioningToFullShadeProgress > 0.0f) {
