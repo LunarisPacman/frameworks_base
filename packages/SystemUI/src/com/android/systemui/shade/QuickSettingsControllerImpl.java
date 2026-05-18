@@ -1112,7 +1112,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             int qsVisibility = isQsVisible ? View.VISIBLE : View.INVISIBLE;
             int nsslVisibility = isQsVisible ? View.INVISIBLE : View.VISIBLE;
 
-            if (mQsFrame.getVisibility() != qsVisibility) {
+            if (mQsFrame != null && mQsFrame.getVisibility() != qsVisibility) {
                 mQsFrame.setVisibility(qsVisibility);
             }
             if (mQs.getView() != null && mQs.getView().getVisibility() != qsVisibility) {
@@ -1121,11 +1121,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             if (mQs.getHeader() != null && mQs.getHeader().getVisibility() != qsVisibility) {
                 mQs.getHeader().setVisibility(qsVisibility);
             }
-            if (mNotificationStackScrollLayoutController.getView().getVisibility() != nsslVisibility) {
+            if (mNotificationStackScrollLayoutController.getView() != null
+                    && mNotificationStackScrollLayoutController.getView().getVisibility() != nsslVisibility) {
                 mNotificationStackScrollLayoutController.getView().setVisibility(nsslVisibility);
             }
         } else {
-            if (mQsFrame.getVisibility() != View.VISIBLE) {
+            if (mQsFrame != null && mQsFrame.getVisibility() != View.VISIBLE) {
                 mQsFrame.setVisibility(View.VISIBLE);
             }
             if (mQs.getView() != null && mQs.getView().getVisibility() != View.VISIBLE) {
@@ -1134,7 +1135,8 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             if (mQs.getHeader() != null && mQs.getHeader().getVisibility() != View.VISIBLE) {
                 mQs.getHeader().setVisibility(View.VISIBLE);
             }
-            if (mNotificationStackScrollLayoutController.getView().getVisibility() != View.VISIBLE) {
+            if (mNotificationStackScrollLayoutController.getView() != null
+                    && mNotificationStackScrollLayoutController.getView().getVisibility() != View.VISIBLE) {
                 mNotificationStackScrollLayoutController.getView().setVisibility(View.VISIBLE);
             }
         }
