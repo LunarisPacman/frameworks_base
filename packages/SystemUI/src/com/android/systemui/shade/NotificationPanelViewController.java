@@ -2019,6 +2019,8 @@ public final class NotificationPanelViewController implements
             float qsExpansionFraction;
             if (mSplitShadeEnabled) {
                 qsExpansionFraction = 1;
+            } else if (mQsController.getSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE) {
+                qsExpansionFraction = (mQsController.isExpandImmediate() || mQsController.getExpanded()) ? getExpandedFraction() : 0;
             } else if (isKeyguardShowing()) {
                 // On Keyguard, interpolate the QS expansion linearly to the panel expansion
                 qsExpansionFraction = expandedHeight / (getMaxPanelHeight());
