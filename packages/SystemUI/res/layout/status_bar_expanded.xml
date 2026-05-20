@@ -105,6 +105,49 @@
             systemui:layout_constraintGuide_percent="0.5"
             android:orientation="vertical"/>
 
+        <!-- split shade notification header: sits in the left/top empty space of the
+             notification panel (constrained to the qs edge guideline) -->
+        <LinearLayout
+            android:id="@+id/split_shade_notification_header"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="24dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="16dp"
+            android:padding="12dp"
+            android:background="@drawable/split_shade_header_bg"
+            android:elevation="4dp"
+            systemui:layout_constraintStart_toStartOf="parent"
+            systemui:layout_constraintEnd_toEndOf="@id/qs_edge_guideline"
+            systemui:layout_constraintTop_toTopOf="parent">
+
+            <TextClock
+                android:id="@+id/split_shade_header_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h:mm a"
+                android:format24Hour="HH:mm"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="28sp"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true" />
+
+            <TextClock
+                android:id="@+id/split_shade_header_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="EEEE, MMM d"
+                android:format24Hour="EEEE, MMM d"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif"
+                android:layout_marginTop="4dp"
+                android:singleLine="true" />
+
+        </LinearLayout>
+
         <!-- This layout should always include a version of
              NotificationStackScrollLayout, as it is expected from
              NotificationPanelViewController. -->
