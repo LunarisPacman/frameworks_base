@@ -388,6 +388,7 @@ public final class NotificationPanelViewController implements
     private boolean mSplitShadeEnabled;
     private KeyguardStatusBarViewController mKeyguardStatusBarViewController;
     private NotificationsQuickSettingsContainer mNotificationContainerParent;
+    private View mSplitShadeNotificationHeader;
     private final NotificationsQSContainerController mNotificationsQSContainerController;
     private boolean mAnimateNextPositionUpdate;
     private final ScreenOffAnimationController mScreenOffAnimationController;
@@ -969,6 +970,7 @@ public final class NotificationPanelViewController implements
                         .getKeyguardStatusBarViewController();
         mKeyguardStatusBarViewController.init();
         mNotificationContainerParent = mView.findViewById(R.id.notification_container_parent);
+        mSplitShadeNotificationHeader = mView.findViewById(R.id.split_shade_notification_header);
         mNotificationStackScrollLayoutController.setOnHeightChangedListener(
                 new NsslHeightChangedListener());
         mNotificationStackScrollLayoutController.setOnEmptySpaceClickListener(
@@ -1076,6 +1078,7 @@ public final class NotificationPanelViewController implements
                 R.dimen.split_shade_scrim_transition_distance);
         // TODO (b/265193930): remove this and make QsController listen to NotificationPanelViews
         mQsController.loadDimens();
+        updateSplitShadeNotificationHeader();
     }
 
     private void handleBouncerShowingChanged(Boolean isBouncerShowing) {
@@ -1966,9 +1969,10 @@ public final class NotificationPanelViewController implements
             min = Math.max(min, minHeight);
         }
         int maxHeight;
-        if (mQsController.isExpandImmediate() || mQsController.getExpanded()
+        if ((mQsController.isExpandImmediate() || mQsController.getExpanded()
                 || mIsExpandingOrCollapsing && mQsController.getExpandedWhenExpandingStarted()
-                || mPulsing || mSplitShadeEnabled) {
+                || mPulsing || mSplitShadeEnabled)
+                && !(mQsController.getSplitShadeEnabledLegacy() && mBarState == StatusBarState.SHADE)) {
             maxHeight = mQsController.calculatePanelHeightExpanded(
                     mClockPositionResult.stackScrollerPadding);
         } else {
@@ -2432,6 +2436,7 @@ public final class NotificationPanelViewController implements
             mNotificationStackScrollLayoutController.setExpandedHeight(expandedHeight);
         }
         updateStatusBarIcons();
+        updateSplitShadeNotificationHeader();
     }
 
     private void updateStatusBarIcons() {
@@ -3731,6 +3736,7 @@ public final class NotificationPanelViewController implements
 
             // TODO: maybe add a listener for barstate
             mBarState = statusBarState;
+            updateSplitShadeNotificationHeader();
             ScrimUtils.get().setBarState(mBarState);
             mQsController.setBarState(statusBarState);
 
@@ -4736,6 +4742,37 @@ public final class NotificationPanelViewController implements
             transitionDrawable.startTransition(1000);
         } else {
             mQsHeaderImageView.setImageDrawable(dw);
+        }
+    }
+
+    private void updateSplitShadeNotificationHeader() {
+        if (mSplitShadeNotificationHeader == null) {
+            return;
+        }
+
+        boolean shouldShow = mQsController.getSplitShadeEnabledLegacy()
+                && mBarState == StatusBarState.SHADE
+                && !isKeyguardShowing()
+                && !mQsController.getExpanded()
+                && !com.android.systemui.util.LargeScreenUtils.shouldUseLargeScreenShadeHeader(mResources);
+
+        float fraction = getExpandedFraction();
+        if (shouldShow && fraction > 0f) {
+            // Keep header in strict lockstep with shade expansion to avoid delayed slide-in/out.
+            mSplitShadeNotificationHeader.animate().cancel();
+            float alpha = com.android.systemui.animation.ShadeInterpolation.getContentAlpha(fraction);
+            float translationY = (fraction - 1f) * (mSplitShadeNotificationHeader.getHeight() > 0
+                    ? mSplitShadeNotificationHeader.getHeight()
+                    : TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 100, mResources.getDisplayMetrics()));
+
+            mSplitShadeNotificationHeader.setVisibility(View.VISIBLE);
+            mSplitShadeNotificationHeader.setAlpha(alpha);
+            mSplitShadeNotificationHeader.setTranslationY(translationY);
+        } else {
+            mSplitShadeNotificationHeader.animate().cancel();
+            mSplitShadeNotificationHeader.setAlpha(0f);
+            mSplitShadeNotificationHeader.setTranslationY(0f);
+            mSplitShadeNotificationHeader.setVisibility(View.GONE);
         }
     }
 }
