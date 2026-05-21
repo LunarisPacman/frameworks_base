@@ -153,6 +153,7 @@
 
     <!-- NotificationPanelView -->
     <item type="id" name="notification_panel" />
+    <item type="id" name="split_shade_notification_header" />
 
     <!-- Screen Recording -->
     <item type="id" name="screen_recording_options" />

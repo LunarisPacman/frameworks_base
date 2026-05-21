@@ -1182,7 +1182,11 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         );
         if (mQsSplitShadeEnabledLegacy && mBarState == StatusBarState.SHADE) {
             if (mQsFrame != null) {
-                float translationLimit = mNotificationStackScrollLayoutController.getView().getExpandTranslationStart();
+                // getExpandTranslationStart() is private on NotificationStackScrollLayout; compute
+                // the same value using public APIs: -topPadding + minExpansionHeight - shelfHeight
+                float translationLimit = -mNotificationStackScrollLayoutController.getView().getTopPadding()
+                    + mNotificationStackScrollLayoutController.getView().getMinExpansionHeight()
+                    - mNotificationStackScrollLayoutController.getShelfHeight();
                 float translationY = (1.0f - mShadeExpandedFraction) * translationLimit;
                 mQsFrame.setTranslationY(translationY);
                 mQsFrame.setAlpha(com.android.systemui.animation.ShadeInterpolation.getContentAlpha(mShadeExpandedFraction));

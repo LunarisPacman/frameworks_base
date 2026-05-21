@@ -4757,8 +4757,6 @@ public final class NotificationPanelViewController implements
                 && !com.android.systemui.util.LargeScreenUtils.shouldUseLargeScreenShadeHeader(mResources);
 
         float fraction = getExpandedFraction();
-        View statusBarClock = mView.getRootView().findViewById(com.android.systemui.res.R.id.clock);
-
         if (shouldShow && fraction > 0f) {
             // Keep header in strict lockstep with shade expansion to avoid delayed slide-in/out.
             mSplitShadeNotificationHeader.animate().cancel();
@@ -4770,19 +4768,11 @@ public final class NotificationPanelViewController implements
             mSplitShadeNotificationHeader.setVisibility(View.VISIBLE);
             mSplitShadeNotificationHeader.setAlpha(alpha);
             mSplitShadeNotificationHeader.setTranslationY(translationY);
-
-            if (statusBarClock != null) {
-                statusBarClock.setAlpha(Math.max(0f, 1f - (fraction * 2f))); // Fade out quickly as shade expands
-            }
         } else {
             mSplitShadeNotificationHeader.animate().cancel();
             mSplitShadeNotificationHeader.setAlpha(0f);
             mSplitShadeNotificationHeader.setTranslationY(0f);
             mSplitShadeNotificationHeader.setVisibility(View.GONE);
-
-            if (statusBarClock != null) {
-                statusBarClock.setAlpha(1f);
-            }
         }
     }
 }
