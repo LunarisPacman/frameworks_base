@@ -14897,6 +14897,12 @@ public final class Settings {
         public static final String LOCK_SCREEN_CUSTOM_CLOCK_AOD_ANIM = "lock_screen_custom_clock_aod_anim";
 
         /**
+         * Custom clock animation
+         * @hide
+         */
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_ALBUM_ART_COLOR = "lock_screen_custom_clock_album_art_color";
+
+        /**
          * Timeout length for clipboard auto clear
          * @hide
          */
