@@ -21,11 +21,13 @@ import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserAction
 import com.android.compose.animation.scene.UserActionResult
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay
-import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.scene.shared.model.Overlays
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.StartHalf
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.EndHalf
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeEndHalf
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeStartHalf
 import com.android.systemui.scene.ui.viewmodel.UserActionsViewModel
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import dagger.assisted.AssistedFactory
@@ -39,11 +41,7 @@ constructor(private val shadeModeInteractor: ShadeModeInteractor) : UserActionsV
 
     override suspend fun hydrateActions(setActions: (Map<UserAction, UserActionResult>) -> Unit) {
         val hideNotificationsShade = HideOverlay(Overlays.NotificationsShade)
-        val openQuickSettingsShade =
-            ShowOverlay(
-                Overlays.QuickSettingsShade,
-                hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.NotificationsShade),
-            )
+        val openQuickSettingsShade = ReplaceByOverlay(Overlays.QuickSettingsShade)
 
         shadeModeInteractor.isFullWidthShade
             .map { isFullWidthShade ->
@@ -51,9 +49,14 @@ constructor(private val shadeModeInteractor: ShadeModeInteractor) : UserActionsV
                     put(Swipe.Up, hideNotificationsShade)
                     put(Back, hideNotificationsShade)
                     if (!isFullWidthShade) {
+                        put(Swipe.Down(fromSource = StartHalf), openQuickSettingsShade)
+                        put(Swipe.Down(fromSource = TopEdgeStartHalf), openQuickSettingsShade)
                         put(Swipe.Down(fromSource = EndHalf), openQuickSettingsShade)
+                        put(Swipe.Down(fromSource = TopEdgeEndHalf), openQuickSettingsShade)
                     }
-                    put(Swipe.Down(fromSource = TopEdgeEndHalf), openQuickSettingsShade)
+                    else {
+                        put(Swipe.Down(fromSource = TopEdgeEndHalf), openQuickSettingsShade)
+                    }
                 }
             }
             .collect { actions -> setActions(actions) }

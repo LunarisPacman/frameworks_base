@@ -22,8 +22,7 @@ import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.Back
 import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
-import com.android.compose.animation.scene.UserActionResult.ShowOverlay
-import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.flags.EnableSceneContainer
@@ -33,6 +32,7 @@ import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.lifecycle.activateIn
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.StartHalf
 import com.android.systemui.shade.domain.interactor.enableDualShade
 import com.android.systemui.shade.ui.viewmodel.notificationsShadeOverlayActionsViewModel
 import com.android.systemui.testKosmos
@@ -78,9 +78,7 @@ class NotificationsShadeOverlayActionsViewModelTest : SysuiTestCase() {
             enableDualShade(wideLayout = true)
 
             val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.EndHalf))
-            assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.QuickSettingsShade)
-            assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
-                .containsExactly(Overlays.NotificationsShade)
+            assertThat(action).isEqualTo(ReplaceByOverlay(Overlays.QuickSettingsShade))
         }
 
     @Test
@@ -98,9 +96,7 @@ class NotificationsShadeOverlayActionsViewModelTest : SysuiTestCase() {
             enableDualShade(wideLayout = true)
 
             val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf))
-            assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.QuickSettingsShade)
-            assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
-                .containsExactly(Overlays.NotificationsShade)
+            assertThat(action).isEqualTo(ReplaceByOverlay(Overlays.QuickSettingsShade))
         }
 
     @Test
@@ -109,8 +105,24 @@ class NotificationsShadeOverlayActionsViewModelTest : SysuiTestCase() {
             enableDualShade(wideLayout = false)
 
             val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf))
-            assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.QuickSettingsShade)
-            assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
-                .containsExactly(Overlays.NotificationsShade)
+            assertThat(action).isEqualTo(ReplaceByOverlay(Overlays.QuickSettingsShade))
+        }
+
+    @Test
+    fun downFromStartHalf_wideScreen_switchesToQuickSettingsShade() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = true)
+
+            val action = actions?.get(Swipe.Down(fromSource = StartHalf))
+            assertThat(action).isEqualTo(ReplaceByOverlay(Overlays.QuickSettingsShade))
+        }
+
+    @Test
+    fun downFromTopEdgeStartHalf_wideScreen_switchesToQuickSettingsShade() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = true)
+
+            val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf))
+            assertThat(action).isEqualTo(ReplaceByOverlay(Overlays.QuickSettingsShade))
         }
 }

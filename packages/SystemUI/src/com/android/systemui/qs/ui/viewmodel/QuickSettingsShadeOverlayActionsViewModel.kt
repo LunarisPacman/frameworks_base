@@ -21,13 +21,15 @@ import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserAction
 import com.android.compose.animation.scene.UserActionResult
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay
-import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 import com.android.systemui.scene.shared.model.Overlays
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.EndHalf
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.BottomEdge
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.StartHalf
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeStartHalf
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeEndHalf
 import com.android.systemui.scene.ui.viewmodel.UserActionsViewModel
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import dagger.assisted.AssistedFactory
@@ -47,11 +49,7 @@ constructor(
                 isEditing,
                 isFullWidthShade ->
                 val hideQuickSettings = HideOverlay(Overlays.QuickSettingsShade)
-                val openNotificationsShade =
-                    ShowOverlay(
-                        Overlays.NotificationsShade,
-                        hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
-                    )
+                val openNotificationsShade = ReplaceByOverlay(Overlays.NotificationsShade)
                 buildMap {
                     if (isEditing) {
                         // When editing, the back gesture is handled outside of this view-model.
@@ -60,10 +58,13 @@ constructor(
                     } else {
                         put(Back, hideQuickSettings)
                         put(Swipe.Up, hideQuickSettings)
+                        put(Swipe.Up(fromSource = BottomEdge), hideQuickSettings)
                     }
                     put(Swipe.Down(fromSource = TopEdgeStartHalf), openNotificationsShade)
                     if (!isFullWidthShade) {
                         put(Swipe.Down(fromSource = StartHalf), openNotificationsShade)
+                        put(Swipe.Down(fromSource = EndHalf), openNotificationsShade)
+                        put(Swipe.Down(fromSource = TopEdgeEndHalf), openNotificationsShade)
                     }
                 }
             }

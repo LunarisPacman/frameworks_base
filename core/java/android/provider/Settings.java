@@ -14828,6 +14828,12 @@ public final class Settings {
         public static final String QS_SHOW_MEDIA_PLAYER = "qs_show_media_player";
 
         /**
+         * Where to place the qs widget panel
+         * @hide
+         */
+        public static final String QS_WIDGET_PANEL_POSITION = "qs_widget_panel_position";
+
+        /**
          * Control whether the process CPU info meter should be shown.
          * @hide
          */

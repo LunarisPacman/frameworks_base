@@ -1256,7 +1256,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             qqsVisible = !mSplitShadeEnabled && qsExpansionFraction == 0 && qsPanelBottomY > 0;
         }
 
-        final boolean qsVisible = qsExpansionFraction > 0;
+        final boolean qsVisible = qsExpansionFraction > 0 || mSplitShadeEnabled;
         final boolean qsOrQqsVisible = qqsVisible || qsVisible;
 
         int bottom = calculateBottomClippingBound(top);

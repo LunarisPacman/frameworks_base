@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -112,6 +113,18 @@ public class QuickSettingsControllerImplTest extends QuickSettingsControllerImpl
         mQsController.animateCloseQs(false);
 
         assertThat(mQsController.getShadeExpandedHeight()).isEqualTo(shadeExpandedHeight);
+    }
+
+    @Test
+    public void setClippingBounds_inSplitShade_keepsHeaderVisible() {
+        enableSplitShade(true);
+        mQsController.setBarState(SHADE);
+        mQsController.setQs(mQs);
+        clearInvocations(mShadeHeaderController);
+
+        mQsController.setClippingBounds();
+
+        verify(mShadeHeaderController).setQsVisible(true);
     }
 
     @Test
