@@ -76,6 +76,7 @@
 
         <!-- Split shade clock -->
         <include layout="@layout/split_shade_clock"
+            android:id="@+id/split_shade_clock_container"
             systemui:layout_constraintStart_toStartOf="parent"
             systemui:layout_constraintTop_toTopOf="parent"
             android:layout_width="wrap_content"
