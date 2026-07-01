@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/split_shade_clock_container"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="32dp"
+    android:visibility="gone">
+
+    <TextClock
+        android:id="@+id/split_shade_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="EEE, d MMM"
+        android:format24Hour="EEE, d MMM"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="20sp" />
+
+    <TextClock
+        android:id="@+id/split_shade_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="h:mm"
+        android:format24Hour="H:mm"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="72sp"
+        android:fontFamily="google-sans" />
+</LinearLayout>

@@ -74,6 +74,14 @@
 
         <include layout="@layout/dock_info_overlay"/>
 
+        <!-- Split shade clock -->
+        <include layout="@layout/split_shade_clock"
+            systemui:layout_constraintStart_toStartOf="parent"
+            systemui:layout_constraintTop_toTopOf="parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:layout_marginStart="32dp" />
         <FrameLayout
             android:id="@+id/qs_frame"
             android:layout="@layout/qs_panel"

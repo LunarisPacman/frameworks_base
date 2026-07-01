@@ -388,6 +388,7 @@ public final class NotificationPanelViewController implements
     private boolean mSplitShadeEnabled;
     private KeyguardStatusBarViewController mKeyguardStatusBarViewController;
     private NotificationsQuickSettingsContainer mNotificationContainerParent;
+    private View mSplitShadeClockContainer;
     private final NotificationsQSContainerController mNotificationsQSContainerController;
     private boolean mAnimateNextPositionUpdate;
     private final ScreenOffAnimationController mScreenOffAnimationController;
@@ -969,6 +970,9 @@ public final class NotificationPanelViewController implements
                         .getKeyguardStatusBarViewController();
         mKeyguardStatusBarViewController.init();
         mNotificationContainerParent = mView.findViewById(R.id.notification_container_parent);
+        if (mNotificationContainerParent != null) {
+            mSplitShadeClockContainer = mNotificationContainerParent.findViewById(R.id.split_shade_clock_container);
+        }
         mNotificationStackScrollLayoutController.setOnHeightChangedListener(
                 new NsslHeightChangedListener());
         mNotificationStackScrollLayoutController.setOnEmptySpaceClickListener(
@@ -1246,6 +1250,10 @@ public final class NotificationPanelViewController implements
     }
 
     private void updateClockAppearance() {
+        if (mSplitShadeClockContainer != null) {
+            boolean isVisible = mSplitShadeEnabled && mBarState != KEYGUARD;
+            mSplitShadeClockContainer.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+        }
         postToView(() -> {
             mKeyguardClockInteractor.setClockSize(computeDesiredClockSize());
             updateKeyguardStatusViewAlignment();
