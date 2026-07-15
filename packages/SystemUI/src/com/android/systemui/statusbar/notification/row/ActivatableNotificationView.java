@@ -374,7 +374,8 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     }
 
     protected boolean shouldUseAxBlurBackground() {
-        return isAxBlurKeyguardVisible()
+        boolean headsUpBlurEnabled = Settings.System.getInt(mContext.getContentResolver(), "heads_up_blur_enabled", 0) != 0;
+        return (isAxBlurKeyguardVisible() || (isHeadsUp() && headsUpBlurEnabled))
                 && mBackgroundNormal.getVisibility() == VISIBLE
                 && !mIsDozing
                 && !hasAxBlurBlockingTint();
