@@ -81,6 +81,8 @@ import androidx.annotation.Nullable;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.dynamicanimation.animation.FloatPropertyCompat;
 import androidx.dynamicanimation.animation.SpringAnimation;
+import androidx.dynamicanimation.animation.DynamicAnimation;
+import androidx.dynamicanimation.animation.SpringForce;
 
 import com.android.app.animation.Interpolators;
 import com.android.internal.annotations.VisibleForTesting;
@@ -1297,8 +1299,40 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         return super.onInterceptTouchEvent(ev);
     }
 
+    private SpringAnimation mSquishScaleXAnimation;
+    private SpringAnimation mSquishScaleYAnimation;
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                        android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING | android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+                if (mSquishScaleXAnimation == null) {
+                    mSquishScaleXAnimation = new SpringAnimation(this, DynamicAnimation.SCALE_X);
+                    mSquishScaleXAnimation.setSpring(new SpringForce()
+                            .setStiffness(SpringForce.STIFFNESS_MEDIUM)
+                            .setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY));
+                    mSquishScaleYAnimation = new SpringAnimation(this, DynamicAnimation.SCALE_Y);
+                    mSquishScaleYAnimation.setSpring(new SpringForce()
+                            .setStiffness(SpringForce.STIFFNESS_MEDIUM)
+                            .setDampingRatio(SpringForce.DAMPING_RATIO_MEDIUM_BOUNCY));
+                }
+                animate().cancel();
+                mSquishScaleXAnimation.animateToFinalPosition(0.94f);
+                mSquishScaleYAnimation.animateToFinalPosition(0.90f);
+                animate().translationZ(-10f).setDuration(120).start();
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (mSquishScaleXAnimation != null) {
+                    mSquishScaleXAnimation.animateToFinalPosition(1f);
+                    mSquishScaleYAnimation.animateToFinalPosition(1f);
+                }
+                animate().cancel();
+                animate().translationZ(0f).setDuration(350).start();
+                break;
+        }
         if (event.getActionMasked() != MotionEvent.ACTION_DOWN
                 || !isChildInGroup() || isGroupExpanded() || isBundledSummaryClickable()) {
             return super.onTouchEvent(event);
