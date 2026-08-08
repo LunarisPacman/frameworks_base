@@ -272,21 +272,10 @@ private fun IosMusicPlayerContent(
                     .clip(RoundedCornerShape(24.dp)),
                 alpha = 0.35f,
             )
-        }
-
-        // Gradient overlay when media is active
-        if (hasMedia) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                primaryColor.copy(alpha = 0.1f),
-                                onPrimaryColor.copy(alpha = 0.6f),
-                            )
-                        )
-                    )
+                    .background(Color.Black.copy(alpha = 0.25f))
             )
         }
 
