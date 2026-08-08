@@ -171,6 +171,7 @@ fun MediaControlPopup(
             ) {
                 MediaActionButton(
                     action = model.previousAction,
+                    iconOverrideId = R.drawable.ic_skip_previous_filled,
                     containerColor = LocalContentColor.current.copy(alpha = 0.11f),
                     iconTint = LocalContentColor.current,
                 )
@@ -184,6 +185,7 @@ fun MediaControlPopup(
                 )
                 MediaActionButton(
                     action = model.nextAction,
+                    iconOverrideId = R.drawable.ic_skip_next_filled,
                     containerColor = LocalContentColor.current.copy(alpha = 0.11f),
                     iconTint = LocalContentColor.current,
                 )
@@ -416,8 +418,9 @@ private fun MediaActionButton(
     buttonSize: Dp = 54.dp,
     iconSize: Dp = 22.dp,
     emphasized: Boolean = false,
+    iconOverrideId: Int? = null,
 ) {
-    if (action == null || action.icon == null) {
+    if (action == null || (action.icon == null && iconOverrideId == null)) {
         Spacer(modifier = Modifier.size(buttonSize))
         return
     }
@@ -439,11 +442,18 @@ private fun MediaActionButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        UiIconView(
-            icon = UiIcon.Loaded(action.icon, contentDescription),
-            modifier = Modifier.size(iconSize).padding(start = if (emphasized) 1.dp else 0.dp),
-            tint = iconTint,
-        )
+        val actualIcon = if (iconOverrideId != null) {
+            UiIcon.Resource(iconOverrideId, contentDescription)
+        } else {
+            action.icon?.let { UiIcon.Loaded(it, contentDescription) }
+        }
+        if (actualIcon != null) {
+            UiIconView(
+                icon = actualIcon,
+                modifier = Modifier.size(iconSize).padding(start = if (emphasized) 1.dp else 0.dp),
+                tint = iconTint,
+            )
+        }
     }
 }
 
