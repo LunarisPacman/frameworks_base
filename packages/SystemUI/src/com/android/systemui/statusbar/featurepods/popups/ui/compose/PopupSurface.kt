@@ -111,8 +111,11 @@ fun PopupSurface(
             val density = LocalDensity.current
             Box(
                 modifier = modifier
-                    .clip(shape)
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+                    .graphicsLayer {
+                        clip = true
+                        this.shape = shape
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    },
             ) {
                 AndroidView(
                     factory = { ctx ->
