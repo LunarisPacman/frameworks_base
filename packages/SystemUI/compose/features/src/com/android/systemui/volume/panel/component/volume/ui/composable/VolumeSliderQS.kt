@@ -157,7 +157,9 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
     }
 
     val shapeMode = rememberQsVolumeSliderShapeMode()
-    val trackCornerDp: Dp = when (shapeMode) {
+    val widgetCorner = rememberQsWidgetSliderCorner()
+    val effectiveStyle = if (widgetCorner != 0) widgetCorner else if (shapeMode == 1) 1 else 0
+    val trackCornerDp: Dp = when (if (widgetCorner != 0) widgetCorner else shapeMode) {
         1 -> 28.dp
         2 -> 18.dp
         3 -> 0.dp
@@ -393,7 +395,7 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
                                 RINGER_VIBRATE -> "Ringer vibrate"
                                 else -> "Ringer silent"
                             },
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier
                                 .size(24.dp)
                                 .graphicsLayer(scaleX = ringerIconScale, scaleY = ringerIconScale),
@@ -443,13 +445,18 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
         label = "QsVolumeIconInactiveAlpha",
     ) { active -> if (active) 0f else 1f }
 
-    val activeIconColor  = MaterialTheme.colorScheme.onPrimary
-    val inactiveIconColor = MaterialTheme.colorScheme.onSurface
+    val activeIconColor  = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
+    val inactiveIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier,
     ) {
+
+                        
+        val qsThumbColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+        val qsOnSurfaceColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+        val qsOnPrimaryColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
         Slider(
             value = animatedValue,
             valueRange = floatValueRange,
@@ -480,37 +487,88 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
                             val trackH = size.height
                             val trackW = size.width
                             val activeEnd = trackW * animatedFraction
-                            val cornerRadius = CornerRadius(trackCornerDp.toPx())
-
-                            drawRoundRect(
-                                color = colors.inactiveTrackColor,
-                                topLeft = Offset.Zero,
-                                size = Size(trackW, trackH),
-                                cornerRadius = cornerRadius,
-                            )
-
-                            if (activeEnd > 0f) {
+                            
+                            if (effectiveStyle == 2) {
+                                val leftWeight = animatedFraction.coerceIn(0.001f, 0.999f)
+                                val rightWeight = (1f - animatedFraction).coerceIn(0.001f, 0.999f)
+                                
+                                val spacer = 3.dp.toPx()
+                                val thumbW = 4.dp.toPx()
+                                val vPadding = 7.dp.toPx()
+                                
+                                val availableW = trackW - thumbW - 2 * spacer
+                                val leftW = availableW * leftWeight
+                                val rightW = availableW * rightWeight
+                                
+                                val leftPath = Path().apply {
+                                    addRoundRect(RoundRect(
+                                        left = 0f, top = vPadding, right = leftW, bottom = trackH - vPadding,
+                                        topLeftCornerRadius = CornerRadius(16.dp.toPx()),
+                                        bottomLeftCornerRadius = CornerRadius(16.dp.toPx()),
+                                        topRightCornerRadius = CornerRadius(if (animatedFraction <= 0.05f) 16.dp.toPx() else 4.dp.toPx()),
+                                        bottomRightCornerRadius = CornerRadius(if (animatedFraction <= 0.05f) 16.dp.toPx() else 4.dp.toPx())
+                                    ))
+                                }
+                                
                                 if (gradient != null) {
-                                    val outline = trackShape.createOutline(
-                                        Size(activeEnd.coerceAtMost(trackW), trackH),
-                                        layoutDirection,
-                                        this,
-                                    )
-                                    val clipPath = outline.asQsVolumePath()
-                                    clipPath(clipPath) {
-                                        drawRect(
-                                            brush = gradient.brush,
-                                            topLeft = Offset.Zero,
-                                            size = Size(activeEnd.coerceAtMost(trackW), trackH),
-                                        )
+                                    clipPath(leftPath) {
+                                        drawRect(brush = gradient.brush, size = Size(leftW, trackH))
                                     }
                                 } else {
-                                    drawRoundRect(
-                                        color = colors.activeTrackColor,
-                                        topLeft = Offset.Zero,
-                                        size = Size(activeEnd, trackH),
-                                        cornerRadius = cornerRadius,
-                                    )
+                                    drawPath(path = leftPath, color = colors.activeTrackColor)
+                                }
+                                
+                                val thumbH = trackH - 2.dp.toPx()
+                                drawRoundRect(
+                                    color = qsThumbColor,
+                                    topLeft = Offset(leftW + spacer, 1.dp.toPx()),
+                                    size = Size(thumbW, thumbH),
+                                    cornerRadius = CornerRadius(2.dp.toPx())
+                                )
+                                
+                                val rightPath = Path().apply {
+                                    addRoundRect(RoundRect(
+                                        left = leftW + spacer + thumbW + spacer, top = vPadding, right = trackW, bottom = trackH - vPadding,
+                                        topLeftCornerRadius = CornerRadius(if (animatedFraction >= 0.95f) 16.dp.toPx() else 4.dp.toPx()),
+                                        bottomLeftCornerRadius = CornerRadius(if (animatedFraction >= 0.95f) 16.dp.toPx() else 4.dp.toPx()),
+                                        topRightCornerRadius = CornerRadius(16.dp.toPx()),
+                                        bottomRightCornerRadius = CornerRadius(16.dp.toPx())
+                                    ))
+                                }
+                                drawPath(path = rightPath, color = colors.inactiveTrackColor)
+                            } else {
+                                val cornerRadius = CornerRadius(trackCornerDp.toPx())
+
+                                drawRoundRect(
+                                    color = colors.inactiveTrackColor,
+                                    topLeft = Offset.Zero,
+                                    size = Size(trackW, trackH),
+                                    cornerRadius = cornerRadius,
+                                )
+
+                                if (activeEnd > 0f) {
+                                    if (gradient != null) {
+                                        val outline = trackShape.createOutline(
+                                            Size(activeEnd.coerceAtMost(trackW), trackH),
+                                            layoutDirection,
+                                            this,
+                                        )
+                                        val clipPath = outline.asQsVolumePath()
+                                        clipPath(clipPath) {
+                                            drawRect(
+                                                brush = gradient.brush,
+                                                topLeft = Offset.Zero,
+                                                size = Size(activeEnd.coerceAtMost(trackW), trackH),
+                                            )
+                                        }
+                                    } else {
+                                        drawRoundRect(
+                                            color = colors.activeTrackColor,
+                                            topLeft = Offset.Zero,
+                                            size = Size(activeEnd, trackH),
+                                            cornerRadius = cornerRadius,
+                                        )
+                                    }
                                 }
                             }
 
@@ -519,13 +577,18 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
                             val yOffset  = trackH / 2 - iconSize.height / 2
                             val inactiveW = trackW - activeEnd
 
+                            val dynamicIconInactiveColor = if (effectiveStyle == 2) qsOnSurfaceColor else inactiveIconColor
+                            val dynamicIconActiveColor = if (effectiveStyle == 2) {
+                                if (animatedFraction > 0.15f) qsOnPrimaryColor else qsOnSurfaceColor
+                            } else activeIconColor
+
                             if (iconSize.width < inactiveW - iconPad * 2) {
                                 showIconActive = false
                                 with(musicIconPainter) {
                                     translate(trackW - iconPad - iconSize.width, yOffset) {
                                         draw(
                                             size = iconSize,
-                                            colorFilter = ColorFilter.tint(inactiveIconColor),
+                                            colorFilter = ColorFilter.tint(dynamicIconInactiveColor),
                                             alpha = iconInactiveAlpha,
                                         )
                                     }
@@ -536,7 +599,7 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
                                     translate(activeEnd - iconPad - iconSize.width, yOffset) {
                                         draw(
                                             size = iconSize,
-                                            colorFilter = ColorFilter.tint(activeIconColor),
+                                            colorFilter = ColorFilter.tint(dynamicIconActiveColor),
                                             alpha = iconActiveAlpha,
                                         )
                                     }
@@ -599,7 +662,7 @@ private fun RingerModeButton(
 
     val backgroundColor by animateColorAsState(
         targetValue = when {
-            isActive && ringerBrush == null -> MaterialTheme.colorScheme.primary
+            isActive && ringerBrush == null -> androidx.compose.material3.MaterialTheme.colorScheme.primary
             isActive -> Color.Unspecified
             else -> CustomColorScheme.current.qsTileColor
         },
@@ -607,8 +670,8 @@ private fun RingerModeButton(
     )
 
     val iconTint by animateColorAsState(
-        targetValue = if (isActive) MaterialTheme.colorScheme.onPrimary
-                      else MaterialTheme.colorScheme.onSurface,
+        targetValue = if (isActive) androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
+                      else androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
         label = "RingerIconTint",
     )
 
@@ -705,6 +768,46 @@ private fun Modifier.qsVolumeSquishAnimation(toggleCount: Int): Modifier {
         this.scaleX = scaleX.value
         this.scaleY = scaleY.value
     }
+}
+
+@Composable
+fun rememberQsWidgetSliderCorner(): Int {
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    fun readCorner(): Int {
+        return try {
+            Settings.System.getIntForUser(
+                contentResolver, Settings.System.QS_VOLUME_SLIDER_CORNER, 0,
+                UserHandle.USER_CURRENT
+            )
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    var corner by remember { mutableIntStateOf(readCorner()) }
+
+    DisposableEffect(contentResolver) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    corner = readCorner()
+                }
+            }
+        }
+
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.QS_VOLUME_SLIDER_CORNER),
+            false, observer, UserHandle.USER_ALL
+        )
+
+        onDispose {
+            contentResolver.unregisterContentObserver(observer)
+        }
+    }
+
+    return corner
 }
 
 @Composable
@@ -842,7 +945,7 @@ private fun rememberQsVolumeGradientCustomColors(): Pair<Color, Color> {
         onDispose { contentResolver.unregisterContentObserver(observer) }
     }
 
-    val start = if (startInt != 0) Color(startInt) else MaterialTheme.colorScheme.primary
+    val start = if (startInt != 0) Color(startInt) else androidx.compose.material3.MaterialTheme.colorScheme.primary
     val end = if (endInt != 0) Color(endInt) else MaterialTheme.colorScheme.secondary
     return start to end
 }
@@ -856,7 +959,7 @@ private fun qsVolumeSliderGradient(): QsVolumeGradient? {
         val (start, end) = rememberQsVolumeGradientCustomColors()
         listOf(start, end)
     } else {
-        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+        listOf(androidx.compose.material3.MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
     }
 
     return QsVolumeGradient(brush = Brush.horizontalGradient(colors))
@@ -907,8 +1010,8 @@ private fun qsVolumeSliderColors(gradient: QsVolumeGradient?): SliderColors {
         activeTrackColor = if (gradient != null) Color.Transparent
                            else base.activeTrackColor,
         inactiveTrackColor = CustomColorScheme.current.qsTileColor,
-        activeTickColor = MaterialTheme.colorScheme.onPrimary,
-        inactiveTickColor = MaterialTheme.colorScheme.onSurface,
+        activeTickColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+        inactiveTickColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
     )
 }
 

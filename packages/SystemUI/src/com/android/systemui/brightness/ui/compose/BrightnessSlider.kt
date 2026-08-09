@@ -448,6 +448,10 @@ fun BrightnessSlider(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
+                        
+        val qsThumbColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+        val qsOnSurfaceColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+        val qsOnPrimaryColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
         Slider(
             value = animatedValue,
             valueRange = floatValueRange,
@@ -492,6 +496,7 @@ fun BrightnessSlider(
             thumb = {
                 Box(modifier = Modifier.size(0.dp))
             },
+
             track = { sliderState ->
                 var showIconActive by remember { mutableStateOf(true) }
                 val iconVisibilityTransition =
@@ -795,7 +800,7 @@ private fun rememberGradientCustomColors(): Pair<Color, Color> {
         }
     }
 
-    val start = if (startInt != 0) Color(startInt) else MaterialTheme.colorScheme.primary
+    val start = if (startInt != 0) Color(startInt) else androidx.compose.material3.MaterialTheme.colorScheme.primary
     val end = if (endInt != 0) Color(endInt) else MaterialTheme.colorScheme.secondary
     return start to end
 }
@@ -810,7 +815,7 @@ private fun brightnessSliderGradient(): BrightnessGradient? {
         listOf(start, end)
     } else {
         listOf(
-            MaterialTheme.colorScheme.primary,
+            androidx.compose.material3.MaterialTheme.colorScheme.primary,
             MaterialTheme.colorScheme.secondary
         )
     }
@@ -930,16 +935,16 @@ private fun drawAutoBrightnessButton(
     val autoIconBrush: Brush? = if (autoMode) brightnessGradient?.brush else null
     val backgroundColor by animateColorAsState(
         targetValue = if (autoMode) {
-            if (autoIconBrush == null) MaterialTheme.colorScheme.primary else Color.Unspecified
+            if (autoIconBrush == null) androidx.compose.material3.MaterialTheme.colorScheme.primary else Color.Unspecified
         } else {
             CustomColorScheme.current.qsTileColor
         }
     )
     val iconTint by animateColorAsState(
         targetValue = if (autoMode) {
-            MaterialTheme.colorScheme.onPrimary
+            androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
         } else {
-            MaterialTheme.colorScheme.onSurface
+            androidx.compose.material3.MaterialTheme.colorScheme.onSurface
         }
     )
     val painterRes = if (autoMode) {
@@ -1159,7 +1164,7 @@ private fun colors(brightnessGradient: BrightnessGradient?): SliderColors {
         .copy(
             activeTrackColor = if (brightnessGradient != null) Color.Transparent else base.activeTrackColor,
             inactiveTrackColor = CustomColorScheme.current.qsTileColor,
-            activeTickColor = MaterialTheme.colorScheme.onPrimary,
-            inactiveTickColor = MaterialTheme.colorScheme.onSurface,
+            activeTickColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+            inactiveTickColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
         )
 }

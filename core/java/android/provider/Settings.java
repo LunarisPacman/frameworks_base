@@ -7049,6 +7049,12 @@ public final class Settings {
          */
         public static final String QS_WIDGET_SLIDER_CORNER = "qs_widget_slider_corner";
 
+        /** @hide */
+        public static final String QS_BRIGHTNESS_SLIDER_CORNER = "qs_brightness_slider_corner";
+
+        /** @hide */
+        public static final String QS_VOLUME_SLIDER_CORNER = "qs_volume_slider_corner";
+
         /**
          * @hide
          */
