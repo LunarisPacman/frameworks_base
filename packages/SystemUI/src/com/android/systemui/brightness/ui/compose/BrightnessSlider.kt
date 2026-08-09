@@ -176,13 +176,8 @@ fun BrightnessSlider(
     var useAxStyle by remember { mutableStateOf(readUseAxStyle(cr)) }
     var showAutoBrightness by remember { mutableStateOf(readShowAutoBrightness(cr)) }
 
-    val shapeMode = rememberSliderShapeMode()
-    val trackCornerDp: Dp = when (shapeMode) {
-        1 -> 28.dp  /* Circle */
-        2 -> 18.dp  /* Rounded Square */
-        3 -> 0.dp /* Square */
-        else -> Dimensions.SliderTrackRoundedCorner
-    }
+    val effectiveStyle = readQsBrightnessSliderCorner()
+    val trackCornerDp: Dp = if (effectiveStyle == 2) 18.dp else Dimensions.SliderTrackRoundedCorner
 
     val brightnessGradient = brightnessSliderGradient()
 
@@ -537,65 +532,123 @@ fun BrightnessSlider(
                                 val trackHeight = size.height
                                 val trackWidth = size.width
                                 val activeTrackEnd = trackWidth * animatedFraction
-                                
-                                val cornerRadius = CornerRadius(trackCornerDp.toPx())
-                                
-                                drawRoundRect(
-                                    color = colors.inactiveTrackColor,
-                                    topLeft = Offset(0f, 0f),
-                                    size = Size(trackWidth, trackHeight),
-                                    cornerRadius = cornerRadius
-                                )
-                                
-                                if (activeTrackEnd > 0f) {
-                                    if (brightnessGradient != null) {
-                                        // Draw gradient over the active track portion
-                                        val outline = trackShape.createOutline(
-                                            Size(activeTrackEnd.coerceAtMost(trackWidth), trackHeight),
-                                            layoutDirection,
-                                            this
-                                        )
-                                        val clipPath = outline.asPath()
-                                        clipPath(clipPath) {
-                                            drawRect(
-                                                brush = brightnessGradient.brush,
-                                                topLeft = Offset.Zero,
-                                                size = Size(activeTrackEnd.coerceAtMost(trackWidth), trackHeight)
-                                            )
-                                        }
-                                    } else {
-                                        drawRoundRect(
-                                            color = colors.activeTrackColor,
-                                            topLeft = Offset(0f, 0f),
-                                            size = Size(activeTrackEnd, trackHeight),
-                                            cornerRadius = cornerRadius
-                                        )
-                                    }
-                                }
-
                                 val yOffset = trackHeight / 2 - IconSize.toSize().height / 2
                                 val activeTrackWidth = activeTrackEnd
                                 val inactiveTrackWidth = trackWidth - activeTrackEnd
 
-                                if (
-                                    IconSize.toSize().width <
-                                        inactiveTrackWidth - IconPadding.toPx() * 2
-                                ) {
-                                    showIconActive = false
-                                    trackIcon(
-                                        Offset(trackWidth, yOffset),
-                                        inactiveIconColor,
-                                        iconInactiveAlpha,
+                                if (effectiveStyle == 2) {
+                                    val leftW = trackWidth * animatedFraction
+                                    val rightW = trackWidth - leftW
+                                    val spacer = if (leftW > 0f && rightW > 0f) 4.dp.toPx() else 0f
+                                    val thumbH = trackHeight - 2.dp.toPx()
+
+                                    // Right (inactive) part
+                                    if (rightW > 0f) {
+                                        drawRoundRect(
+                                            color = colors.inactiveTrackColor,
+                                            topLeft = Offset(leftW + spacer, 1.dp.toPx()),
+                                            size = Size(rightW - spacer, thumbH),
+                                            cornerRadius = CornerRadius(16.dp.toPx())
+                                        )
+                                    }
+
+                                    // Left (active) part
+                                    if (leftW > 0f) {
+                                        val cr1 = CornerRadius(16.dp.toPx())
+                                        val cr2 = CornerRadius(4.dp.toPx())
+                                        val path = androidx.compose.ui.graphics.Path().apply {
+                                            addRoundRect(
+                                                androidx.compose.ui.geometry.RoundRect(
+                                                    left = 0f,
+                                                    top = 1.dp.toPx(),
+                                                    right = leftW,
+                                                    bottom = 1.dp.toPx() + thumbH,
+                                                    topLeftCornerRadius = cr1,
+                                                    bottomLeftCornerRadius = cr1,
+                                                    topRightCornerRadius = cr2,
+                                                    bottomRightCornerRadius = cr2
+                                                )
+                                            )
+                                        }
+                                        if (brightnessGradient != null) {
+                                            clipPath(path) {
+                                                drawRect(
+                                                    brush = brightnessGradient.brush,
+                                                    topLeft = Offset.Zero,
+                                                    size = Size(leftW, trackHeight)
+                                                )
+                                            }
+                                        } else {
+                                            drawPath(
+                                                path = path,
+                                                color = qsThumbColor
+                                            )
+                                        }
+                                    }
+
+                                    // Thumb Pill
+                                    val thumbPillWidth = 4.dp.toPx()
+                                    val thumbPillHeight = 16.dp.toPx()
+                                    val pillX = (leftW - thumbPillWidth - 8.dp.toPx()).coerceAtLeast(8.dp.toPx())
+                                    if (leftW > 16.dp.toPx()) {
+                                        drawRoundRect(
+                                            color = qsOnPrimaryColor,
+                                            topLeft = Offset(pillX, trackHeight / 2 - thumbPillHeight / 2),
+                                            size = Size(thumbPillWidth, thumbPillHeight),
+                                            cornerRadius = CornerRadius(2.dp.toPx())
+                                        )
+                                    }
+
+                                    // Draw icon
+                                    val dynamicIconInactiveColor = qsOnSurfaceColor
+                                    val dynamicIconActiveColor = if (animatedFraction > 0.15f) qsOnPrimaryColor else qsOnSurfaceColor
+                                    if (IconSize.toSize().width < rightW - IconPadding.toPx() * 2) {
+                                        showIconActive = false
+                                        trackIcon(Offset(trackWidth, yOffset), dynamicIconInactiveColor, iconInactiveAlpha)
+                                    } else if (IconSize.toSize().width < leftW - IconPadding.toPx() * 2) {
+                                        showIconActive = true
+                                        trackIcon(Offset(leftW, yOffset), dynamicIconActiveColor, iconActiveAlpha)
+                                    }
+                                } else {
+                                    val cornerRadius = CornerRadius(trackHeight / 2)
+                                    drawRoundRect(
+                                        color = colors.inactiveTrackColor,
+                                        topLeft = Offset(0f, 0f),
+                                        size = Size(trackWidth, trackHeight),
+                                        cornerRadius = cornerRadius
                                     )
-                                } else if (
-                                    IconSize.toSize().width < activeTrackWidth - IconPadding.toPx() * 2
-                                ) {
-                                    showIconActive = true
-                                    trackIcon(
-                                        Offset(activeTrackEnd, yOffset),
-                                        activeIconColor,
-                                        iconActiveAlpha,
-                                    )
+                                    
+                                    if (activeTrackEnd > 0f) {
+                                        if (brightnessGradient != null) {
+                                            val outline = trackShape.createOutline(
+                                                Size(activeTrackEnd.coerceAtMost(trackWidth), trackHeight),
+                                                layoutDirection,
+                                                this
+                                            )
+                                            clipPath(outline.asPath()) {
+                                                drawRect(
+                                                    brush = brightnessGradient.brush,
+                                                    topLeft = Offset.Zero,
+                                                    size = Size(activeTrackEnd.coerceAtMost(trackWidth), trackHeight)
+                                                )
+                                            }
+                                        } else {
+                                            drawRoundRect(
+                                                color = colors.activeTrackColor,
+                                                topLeft = Offset(0f, 0f),
+                                                size = Size(activeTrackEnd, trackHeight),
+                                                cornerRadius = cornerRadius
+                                            )
+                                        }
+                                    }
+
+                                    if (IconSize.toSize().width < inactiveTrackWidth - IconPadding.toPx() * 2) {
+                                        showIconActive = false
+                                        trackIcon(Offset(trackWidth, yOffset), inactiveIconColor, iconInactiveAlpha)
+                                    } else if (IconSize.toSize().width < activeTrackWidth - IconPadding.toPx() * 2) {
+                                        showIconActive = true
+                                        trackIcon(Offset(activeTrackEnd, yOffset), activeIconColor, iconActiveAlpha)
+                                    }
                                 }
                             }
                 )
@@ -637,14 +690,14 @@ fun Outline.asPath(): Path {
 }
 
 @Composable
-fun rememberSliderShapeMode(): Int {
+fun readQsBrightnessSliderCorner(): Int {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
 
-    fun readShapeMode(): Int {
+    fun readCorner(): Int {
         return try {
             Settings.System.getIntForUser(
-                contentResolver, Settings.System.QS_BRIGHTNESS_SLIDER_SHAPE, 0,
+                contentResolver, Settings.System.QS_BRIGHTNESS_SLIDER_STYLE, 0,
                 UserHandle.USER_CURRENT
             )
         } catch (_: Throwable) {
@@ -652,19 +705,19 @@ fun rememberSliderShapeMode(): Int {
         }
     }
 
-    var shapeMode by remember { mutableIntStateOf(readShapeMode()) }
+    var corner by remember { mutableIntStateOf(readCorner()) }
 
     DisposableEffect(contentResolver) {
         val observer = object : ContentObserver(null) {
             override fun onChange(selfChange: Boolean) {
                 context.mainExecutor.execute {
-                    shapeMode = readShapeMode()
+                    corner = readCorner()
                 }
             }
         }
 
         contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.QS_BRIGHTNESS_SLIDER_SHAPE),
+            Settings.System.getUriFor(Settings.System.QS_BRIGHTNESS_SLIDER_STYLE),
             false, observer, UserHandle.USER_ALL
         )
 
@@ -673,7 +726,7 @@ fun rememberSliderShapeMode(): Int {
         }
     }
 
-    return shapeMode
+    return corner
 }
 
 private data class BrightnessGradient(
@@ -924,13 +977,8 @@ private fun drawAutoBrightnessButton(
             22.5.dp
         }
     )
-    val shapeMode = rememberSliderShapeMode()
-    val autoIconShape = when (shapeMode) {
-        1 -> CircleShape
-        2 -> RoundedCornerShape(12.dp)
-        3 -> RoundedCornerShape(0.dp)
-        else -> RoundedCornerShape(animatedCornerRadius)
-    }
+    val effectiveStyle = readQsBrightnessSliderCorner()
+    val autoIconShape = if (effectiveStyle == 2) RoundedCornerShape(12.dp) else RoundedCornerShape(animatedCornerRadius)
     val brightnessGradient = brightnessSliderGradient()
     val autoIconBrush: Brush? = if (autoMode) brightnessGradient?.brush else null
     val backgroundColor by animateColorAsState(
@@ -1014,19 +1062,9 @@ fun BrightnessSliderContainer(
 
     var dragging by remember { mutableStateOf(false) }
 
-    val shapeMode = rememberSliderShapeMode()
-    val trackCornerDp: Dp = when (shapeMode) {
-        1 -> 28.dp  /* Circle */
-        2 -> 18.dp  /* Rounded Square */
-        3 -> 0.dp /* Square */
-        else -> Dimensions.SliderTrackRoundedCorner
-    }
-    val bgCornerDp: Dp = when (shapeMode) {
-        1 -> 50.dp  /* Circle */
-        2 -> 24.dp  /* Rounded Square */
-        3 -> 0.dp /* Square */
-        else -> Dimensions.SliderBackgroundRoundedCorner
-    }
+    val effectiveStyle = readQsBrightnessSliderCorner()
+    val trackCornerDp: Dp = if (effectiveStyle == 2) 18.dp else Dimensions.SliderTrackRoundedCorner
+    val bgCornerDp: Dp = if (effectiveStyle == 2) 24.dp else Dimensions.SliderBackgroundRoundedCorner
 
     // Use dragging instead of viewModel.showMirror so the color starts changing as soon as the
     // dragging state changes. If not, we may be waiting for the background to finish fading in

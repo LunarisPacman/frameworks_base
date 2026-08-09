@@ -7500,12 +7500,6 @@ public final class Settings {
         public static final String QS_TILE_STYLE_MINIMAL_INVERT = "qs_tile_style_minimal_invert";
 
         /**
-         * Customize Brightness slider shape.
-         * @hide
-         */
-        public static final String QS_BRIGHTNESS_SLIDER_SHAPE = "qs_brightness_slider_shape";
-
-        /**
          * @hide
          */
         public static final String QS_BRIGHTNESS_SLIDER_STYLE = "qs_brightness_slider_style";
@@ -7520,10 +7514,7 @@ public final class Settings {
          */
         public static final String QS_VOLUME_SLIDER_HAPTIC = "qs_volume_slider_haptic";
 
-        /**
-         * @hide
-         */
-        public static final String QS_VOLUME_SLIDER_SHAPE = "qs_volume_slider_shape";
+
 
         /**
          * @hide

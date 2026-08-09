@@ -156,15 +156,8 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
         notificationManager.isNotificationPolicyAccessGranted
     }
 
-    val shapeMode = rememberQsVolumeSliderShapeMode()
-    val widgetCorner = rememberQsWidgetSliderCorner()
-    val effectiveStyle = if (widgetCorner != 0) widgetCorner else if (shapeMode == 1) 1 else 0
-    val trackCornerDp: Dp = when (if (widgetCorner != 0) widgetCorner else shapeMode) {
-        1 -> 28.dp
-        2 -> 18.dp
-        3 -> 0.dp
-        else -> QsVolumeSliderDimensions.SliderTrackRoundedCorner
-    }
+    val effectiveStyle = rememberQsWidgetSliderCorner()
+    val trackCornerDp: Dp = if (effectiveStyle == 2) 18.dp else QsVolumeSliderDimensions.SliderTrackRoundedCorner
 
     val gradient = qsVolumeSliderGradient()
 
@@ -616,7 +609,7 @@ fun VolumeSliderQS(modifier: Modifier = Modifier) {
                 ringerMode = ringerMode,
                 toggleCount = ringerToggleCount,
                 hapticsEnabled = hapticsEnabled,
-                shapeMode = shapeMode,
+                effectiveStyle = effectiveStyle,
                 gradient = gradient,
                 buttonSize = QsVolumeSliderDimensions.TrackHeight,
                 onClick = onRingerClick,
@@ -630,7 +623,7 @@ private fun RingerModeButton(
     ringerMode: Int,
     toggleCount: Int,
     hapticsEnabled: Boolean,
-    shapeMode: Int,
+    effectiveStyle: Int,
     gradient: QsVolumeGradient?,
     buttonSize: Dp,
     onClick: () -> Unit,
@@ -639,24 +632,14 @@ private fun RingerModeButton(
 
     val animatedCornerRadius by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (isActive) {
-            when (shapeMode) {
-                1 -> 28.dp
-                2 -> 18.dp
-                3 -> 0.dp
-                else -> QsVolumeSliderDimensions.SliderTrackRoundedCorner
-            }
+            if (effectiveStyle == 2) 18.dp else QsVolumeSliderDimensions.SliderTrackRoundedCorner
         } else {
             22.5.dp
         },
         label = "RingerCornerRadius",
     )
 
-    val ringerShape = when (shapeMode) {
-        1 -> CircleShape
-        2 -> RoundedCornerShape(12.dp)
-        3 -> RoundedCornerShape(0.dp)
-        else -> RoundedCornerShape(animatedCornerRadius)
-    }
+    val ringerShape = if (effectiveStyle == 2) RoundedCornerShape(12.dp) else RoundedCornerShape(animatedCornerRadius)
 
     val ringerBrush: Brush? = if (isActive) gradient?.brush else null
 
@@ -810,39 +793,7 @@ fun rememberQsWidgetSliderCorner(): Int {
     return corner
 }
 
-@Composable
-fun rememberQsVolumeSliderShapeMode(): Int {
-    val context = LocalContext.current
-    val contentResolver = context.contentResolver
 
-    fun readShapeMode(): Int = try {
-        Settings.System.getIntForUser(
-            contentResolver,
-            Settings.System.QS_VOLUME_SLIDER_SHAPE,
-            0,
-            UserHandle.USER_CURRENT,
-        )
-    } catch (_: Throwable) { 0 }
-
-    var shapeMode by remember {
-        mutableIntStateOf(readShapeMode())
-    }
-
-    DisposableEffect(contentResolver) {
-        val observer = object : ContentObserver(null) {
-            override fun onChange(selfChange: Boolean) {
-                context.mainExecutor.execute { shapeMode = readShapeMode() }
-            }
-        }
-        contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.QS_VOLUME_SLIDER_SHAPE),
-            false, observer, UserHandle.USER_ALL,
-        )
-        onDispose { contentResolver.unregisterContentObserver(observer) }
-    }
-
-    return shapeMode
-}
 
 internal data class QsVolumeGradient(val brush: Brush)
 
