@@ -4757,6 +4757,22 @@ public class WindowManagerService extends IWindowManager.Stub
         }
     }
 
+    @Override
+    public void setWallpaperZoomOutForDisplay(int displayId, float zoom) {
+        setWallpaperZoomOutForDisplay_enforcePermission();
+        synchronized (mGlobalLock) {
+            final DisplayContent dc = mRoot.getDisplayContent(displayId);
+            if (dc == null || dc.mWallpaperController == null) {
+                return;
+            }
+            final WindowState target = dc.mWallpaperController.getWallpaperTarget();
+            if (target == null) {
+                return;
+            }
+            dc.mWallpaperController.setWallpaperZoomOut(target, zoom);
+        }
+    }
+
     @Nullable
     Boolean resetIgnoreOrientationRequest(int displayId) {
         synchronized (mGlobalLock) {

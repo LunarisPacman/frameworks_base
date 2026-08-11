@@ -1201,4 +1201,14 @@ interface IWindowManager
      * Returns whether the display with {@code displayId} ignores orientation request.
      */
     boolean getIgnoreOrientationRequest(int displayId);
+
+    /**
+     * Called by System UI to drive the wallpaper zoom-out effect during app open/close
+     * transitions, independent of any client window's Session-based zoom request.
+     *
+     * @param displayId the display whose wallpaper should be zoomed.
+     * @param zoom the zoom-out progress, from 0f (no zoom) to 1f (max zoom-out).
+     */
+    @EnforcePermission("STATUS_BAR")
+    void setWallpaperZoomOutForDisplay(int displayId, float zoom);
 }

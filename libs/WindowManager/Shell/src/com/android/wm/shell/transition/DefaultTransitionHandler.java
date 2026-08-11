@@ -73,6 +73,7 @@ import static com.android.wm.shell.transition.TransitionAnimationHelper.isCovere
 import static com.android.wm.shell.transition.TransitionAnimationHelper.loadAttributeAnimation;
 
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.ColorInt;
 import android.annotation.NonNull;
@@ -93,10 +94,13 @@ import android.hardware.HardwareBuffer;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManagerInternal;
+import android.os.RemoteException;
 import android.os.UserHandle;
 import android.util.ArrayMap;
+import android.util.Slog;
 import android.view.SurfaceControl;
 import android.view.WindowManager;
+import android.view.WindowManagerGlobal;
 import android.view.animation.Animation;
 import android.window.TransitionInfo;
 import android.window.TransitionMetrics;
@@ -128,6 +132,7 @@ import java.util.NoSuchElementException;
 
 /** The default handler that handles anything not already handled. */
 public class DefaultTransitionHandler implements Transitions.TransitionHandler {
+    private static final String TAG = "DefaultTransitionHandler";
     private static final int MAX_ANIMATION_DURATION = 1500;
     private static final int SIZE_CHANGE_ANIMATION_DURATION = 400;
 
@@ -143,6 +148,10 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
 
     /** Keeps track of the currently-running animations associated with each transition. */
     private final ArrayMap<IBinder, ArrayList<Animator>> mAnimations = new ArrayMap<>();
+
+    private static final long WALLPAPER_ZOOM_DURATION_MS = 450L;
+    private static final android.view.animation.Interpolator WALLPAPER_ZOOM_INTERPOLATOR =
+            new android.view.animation.DecelerateInterpolator(1.5f);
 
     private final CounterRotatorHelper mRotator = new CounterRotatorHelper();
     private final Rect mInsets = new Rect(0, 0, 0, 0);
@@ -642,6 +651,42 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                         isTask || isActivity
                                 ? mRoundedContentBounds.forDisplay(change.getEndDisplayId())
                                 : null);
+
+                final boolean isPrimaryWallpaperDriver = isTask
+                        && ((wallpaperTransit == WALLPAPER_TRANSITION_OPEN
+                                && TransitionUtil.isOpeningType(mode))
+                            || (wallpaperTransit == WALLPAPER_TRANSITION_CLOSE
+                                && TransitionUtil.isClosingType(mode)));
+                if (isPrimaryWallpaperDriver) {
+                    final boolean isOpening = TransitionUtil.isOpeningType(mode);
+                    final int animDisplayId = change.getTaskInfo().displayId;
+
+                    final ValueAnimator wallpaperZoomAnim = ValueAnimator.ofFloat(0f, 1f);
+                    wallpaperZoomAnim.setDuration(WALLPAPER_ZOOM_DURATION_MS);
+                    wallpaperZoomAnim.setInterpolator(WALLPAPER_ZOOM_INTERPOLATOR);
+                    wallpaperZoomAnim.addUpdateListener(anim -> {
+                        final float fraction = (float) anim.getAnimatedValue();
+                        final float zoom = isOpening ? (1f - fraction) : fraction;
+                        try {
+                            WindowManagerGlobal.getWindowManagerService()
+                                    .setWallpaperZoomOutForDisplay(animDisplayId, zoom);
+                        } catch (RemoteException e) {
+                            Slog.w(TAG, "Failed to set wallpaper zoom", e);
+                        }
+                    });
+                    wallpaperZoomAnim.addListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            try {
+                                WindowManagerGlobal.getWindowManagerService()
+                                        .setWallpaperZoomOutForDisplay(animDisplayId, 0f);
+                            } catch (RemoteException e) {
+                                Slog.w(TAG, "Failed to reset wallpaper zoom", e);
+                            }
+                        }
+                    });
+                    mMainExecutor.execute(wallpaperZoomAnim::start);
+                }
 
                 final TransitionInfo.AnimationOptions options = change.getAnimationOptions();
                 if (options != null) {
