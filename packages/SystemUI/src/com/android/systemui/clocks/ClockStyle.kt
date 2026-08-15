@@ -115,8 +115,14 @@ class ClockStyle @JvmOverloads constructor(
 
     // --- Frosted-glass blur fields ---
     private var blurEnabled = false
-    private var clockRenderNode: RenderNode? = null
-    private var isCapturingBlur = false
+    private var wallpaperBlurShader: BitmapShader? = null
+    private var wallpaperBitmapWidth: Int = 0
+    private var wallpaperBitmapHeight: Int = 0
+    private var isFetchingWallpaper = false
+    private val frostedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val frostedOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(45, 255, 255, 255)
+    }
     /** Accumulated glyph outline path, built in ClockStyle coordinate space. */
     private val textGlyphPath = Path()
     /** Scratch paint used only for getTextPath — never renders directly. */
@@ -126,10 +132,6 @@ class ClockStyle @JvmOverloads constructor(
     /** Saved original text colors for each styled view, used during blur draw pass. */
     private val savedTextColors = ArrayList<Int>()
 
-    private val frostedOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(45, 255, 255, 255)
-    }
-
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -137,6 +139,12 @@ class ClockStyle @JvmOverloads constructor(
                 Intent.ACTION_TIME_TICK,
                 Intent.ACTION_TIME_CHANGED,
                 DOZE_PULSE_ACTION -> onTimeChanged()
+                Intent.ACTION_WALLPAPER_CHANGED -> {
+                    wallpaperBlurShader = null
+                    if (blurEnabled && clockStyle != 0 && !isDozing) {
+                        fetchWallpaperBlurShader()
+                    }
+                }
                 Intent.ACTION_POWER_CONNECTED -> {
                     if (clockWobbleOnChargeEnabled && !isDozing) {
                         startWobbleAnimation()
@@ -240,6 +248,7 @@ class ClockStyle @JvmOverloads constructor(
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_TIME_TICK)
             addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_WALLPAPER_CHANGED)
             addAction(DOZE_PULSE_ACTION)
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
@@ -457,6 +466,46 @@ class ClockStyle @JvmOverloads constructor(
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
     override fun dispatchDraw(canvas: Canvas) {
+        val active = blurEnabled && clockStyle != 0 && !isDozing
+        if (active) {
+            val shader = wallpaperBlurShader
+            if (shader == null && !isFetchingWallpaper) {
+                fetchWallpaperBlurShader()
+            }
+
+            if (shader != null && wallpaperBitmapWidth > 0 && wallpaperBitmapHeight > 0) {
+                if (glyphPathDirty) rebuildGlyphPath()
+
+                val metrics = context.resources.displayMetrics
+                val screenW = metrics.widthPixels.toFloat()
+                val screenH = metrics.heightPixels.toFloat()
+
+                val loc = IntArray(2)
+                getLocationOnScreen(loc)
+
+                val matrix = Matrix()
+                matrix.setScale(screenW / wallpaperBitmapWidth.toFloat(), screenH / wallpaperBitmapHeight.toFloat())
+                matrix.postTranslate(-loc[0].toFloat(), -loc[1].toFloat())
+                shader.setLocalMatrix(matrix)
+
+                frostedPaint.shader = shader
+
+                // 1. Draw blurred wallpaper strictly inside the glyph path
+                canvas.drawPath(textGlyphPath, frostedPaint)
+                // 2. Draw subtle frosted glass white tint overlay
+                canvas.drawPath(textGlyphPath, frostedOverlayPaint)
+                return
+            } else {
+                // Subtle glass fallback while loading
+                if (glyphPathDirty) rebuildGlyphPath()
+                canvas.save()
+                frostedOverlayPaint.color = Color.argb(160, 255, 255, 255)
+                canvas.drawPath(textGlyphPath, frostedOverlayPaint)
+                frostedOverlayPaint.color = Color.argb(45, 255, 255, 255)
+                canvas.restore()
+                return
+            }
+        }
         super.dispatchDraw(canvas)
     }
 
@@ -791,9 +840,267 @@ class ClockStyle @JvmOverloads constructor(
     private fun applyBlurState() {
         val active = blurEnabled && clockStyle != 0 && !isDozing
         if (active) {
+            if (wallpaperBlurShader == null) {
+                fetchWallpaperBlurShader()
+            }
             setWillNotDraw(false)
             invalidate()
+        } else {
+            wallpaperBlurShader = null
+            invalidate()
         }
+    }
+
+    private fun fetchWallpaperBlurShader() {
+        if (isFetchingWallpaper) return
+        isFetchingWallpaper = true
+        Thread({
+            try {
+                val wm = WallpaperManager.getInstance(context)
+                val bmp = wm.getBitmap(false, WallpaperManager.FLAG_LOCK)
+                    ?: wm.getBitmap(false, WallpaperManager.FLAG_SYSTEM)
+                    ?: run {
+                        val d = wm.drawable ?: wm.peekDrawable()
+                        if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                            val b = Bitmap.createBitmap(d.intrinsicWidth, d.intrinsicHeight, Bitmap.Config.ARGB_8888)
+                            val c = Canvas(b)
+                            d.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight)
+                            d.draw(c)
+                            b
+                        } else null
+                    }
+
+                if (bmp != null) {
+                    val metrics = context.resources.displayMetrics
+                    val screenW = metrics.widthPixels.coerceAtLeast(1)
+                    val screenH = metrics.heightPixels.coerceAtLeast(1)
+
+                    val scaledW = (screenW / 4).coerceAtLeast(64)
+                    val scaledH = (screenH / 4).coerceAtLeast(64)
+                    val scaledBmp = Bitmap.createScaledBitmap(bmp, scaledW, scaledH, true)
+
+                    val blurredBmp = stackBlurBitmap(scaledBmp, 12)
+                    val shader = BitmapShader(blurredBmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+
+                    post {
+                        wallpaperBlurShader = shader
+                        wallpaperBitmapWidth = scaledW
+                        wallpaperBitmapHeight = scaledH
+                        isFetchingWallpaper = false
+                        invalidate()
+                    }
+                } else {
+                    post {
+                        isFetchingWallpaper = false
+                    }
+                }
+            } catch (e: Exception) {
+                post {
+                    isFetchingWallpaper = false
+                }
+            }
+        }, "ClockWallpaperBlurLoader").start()
+    }
+
+    private fun stackBlurBitmap(sentBitmap: Bitmap, radius: Int): Bitmap {
+        val config = sentBitmap.config ?: Bitmap.Config.ARGB_8888
+        val bitmap = sentBitmap.copy(config, true)
+        if (radius < 1) return bitmap
+        val w = bitmap.width
+        val h = bitmap.height
+        val pix = IntArray(w * h)
+        bitmap.getPixels(pix, 0, w, 0, 0, w, h)
+        val wm = w - 1
+        val hm = h - 1
+        val wh = w * h
+        val div = radius + radius + 1
+        val r = IntArray(wh)
+        val g = IntArray(wh)
+        val b = IntArray(wh)
+        var rsum: Int
+        var gsum: Int
+        var bsum: Int
+        var x: Int
+        var y: Int
+        var i: Int
+        var p: Int
+        var yp: Int
+        var yi: Int
+        var yw: Int
+        val vmin = IntArray(Math.max(w, h))
+        var divsum = div + 1 shr 1
+        divsum *= divsum
+        val dv = IntArray(256 * divsum)
+        i = 0
+        while (i < 256 * divsum) {
+            dv[i] = i / divsum
+            i++
+        }
+        yw = 0
+        yi = 0
+        val stack = Array(div) { IntArray(3) }
+        var stackpointer: Int
+        var stackstart: Int
+        var rbs: Int
+        val r1 = radius + 1
+        var rsumin: Int
+        var gsumin: Int
+        var bsumin: Int
+        var rsumout: Int
+        var gsumout: Int
+        var bsumout: Int
+        y = 0
+        while (y < h) {
+            bsum = 0
+            gsum = 0
+            rsum = 0
+            bsumin = 0
+            gsumin = 0
+            rsumin = 0
+            bsumout = 0
+            gsumout = 0
+            rsumout = 0
+            i = -radius
+            while (i <= radius) {
+                p = pix[yi + Math.min(wm, Math.max(i, 0))]
+                val sir = stack[i + radius]
+                sir[0] = p and 0xff0000 shr 16
+                sir[1] = p and 0x00ff00 shr 8
+                sir[2] = p and 0x0000ff
+                rbs = r1 - Math.abs(i)
+                rsum += sir[0] * rbs
+                gsum += sir[1] * rbs
+                bsum += sir[2] * rbs
+                if (i > 0) {
+                    rsumin += sir[0]
+                    gsumin += sir[1]
+                    bsumin += sir[2]
+                } else {
+                    rsumout += sir[0]
+                    gsumout += sir[1]
+                    bsumout += sir[2]
+                }
+                i++
+            }
+            stackpointer = radius
+            x = 0
+            while (x < w) {
+                r[yi] = dv[rsum]
+                g[yi] = dv[gsum]
+                b[yi] = dv[bsum]
+                rsum -= rsumout
+                gsum -= gsumout
+                bsum -= bsumout
+                stackstart = stackpointer - radius + div
+                val sir = stack[stackstart % div]
+                rsumout -= sir[0]
+                gsumout -= sir[1]
+                bsumout -= sir[2]
+                if (y == 0) {
+                    vmin[x] = Math.min(x + radius + 1, wm)
+                }
+                p = pix[yw + vmin[x]]
+                sir[0] = p and 0xff0000 shr 16
+                sir[1] = p and 0x00ff00 shr 8
+                sir[2] = p and 0x0000ff
+                rsumin += sir[0]
+                gsumin += sir[1]
+                bsumin += sir[2]
+                rsum += rsumin
+                gsum += gsumin
+                bsum += bsumin
+                stackpointer = (stackpointer + 1) % div
+                val sir2 = stack[stackpointer % div]
+                rsumout += sir2[0]
+                gsumout += sir2[1]
+                bsumout += sir2[2]
+                rsumin -= sir2[0]
+                gsumin -= sir2[1]
+                bsumin -= sir2[2]
+                yi++
+                x++
+            }
+            yw += w
+            y++
+        }
+        x = 0
+        while (x < w) {
+            bsum = 0
+            gsum = 0
+            rsum = 0
+            bsumin = 0
+            gsumin = 0
+            rsumin = 0
+            bsumout = 0
+            gsumout = 0
+            rsumout = 0
+            yp = -radius * w
+            i = -radius
+            while (i <= radius) {
+                yi = Math.max(0, yp) + x
+                val sir = stack[i + radius]
+                sir[0] = r[yi]
+                sir[1] = g[yi]
+                sir[2] = b[yi]
+                rbs = r1 - Math.abs(i)
+                rsum += r[yi] * rbs
+                gsum += r[yi] * rbs
+                bsum += b[yi] * rbs
+                if (i > 0) {
+                    rsumin += sir[0]
+                    gsumin += sir[1]
+                    bsumin += sir[2]
+                } else {
+                    rsumout += sir[0]
+                    gsumout += sir[1]
+                    bsumout += sir[2]
+                }
+                if (i < hm) {
+                    yp += w
+                }
+                i++
+            }
+            yi = x
+            stackpointer = radius
+            y = 0
+            while (y < h) {
+                pix[yi] = (-0x1000000 and pix[yi]) or (dv[rsum] shl 16) or (dv[gsum] shl 8) or dv[bsum]
+                rsum -= rsumout
+                gsum -= gsumout
+                bsum -= bsumout
+                stackstart = stackpointer - radius + div
+                val sir = stack[stackstart % div]
+                rsumout -= sir[0]
+                gsumout -= sir[1]
+                bsumout -= sir[2]
+                if (x == 0) {
+                    vmin[y] = Math.min(y + r1, hm) * w
+                }
+                p = x + vmin[y]
+                sir[0] = r[p]
+                sir[1] = g[p]
+                sir[2] = b[p]
+                rsumin += sir[0]
+                gsumin += sir[1]
+                bsumin += sir[2]
+                rsum += rsumin
+                gsum += gsumin
+                bsum += bsumin
+                stackpointer = (stackpointer + 1) % div
+                val sir2 = stack[stackpointer % div]
+                rsumout += sir2[0]
+                gsumout += sir2[1]
+                bsumout += sir2[2]
+                rsumin -= sir2[0]
+                gsumin -= sir2[1]
+                bsumin -= sir2[2]
+                yi += w
+                y++
+            }
+            x++
+        }
+        bitmap.setPixels(pix, 0, w, 0, 0, w, h)
+        return bitmap
     }
 
     private fun getMatrixRelativeToAncestor(view: View, ancestor: View): Matrix {
