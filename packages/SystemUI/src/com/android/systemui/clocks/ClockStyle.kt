@@ -360,6 +360,9 @@ class ClockStyle @JvmOverloads constructor(
         animateAodTransition(dozing)
         applyClockAlpha()
         applyClockColors()
+        // Immediately sync blur renderer enabled state so blur doesn't persist on AOD.
+        applyBlurState()
+        invalidate()
         if (dozing) {
             startBurnInProtection()
             startAodTick()
@@ -438,23 +441,29 @@ class ClockStyle @JvmOverloads constructor(
     /**
      * Draws the frosted-glass clock text blur effect.
      *
-     * We override [dispatchDraw] rather than [onDraw] because child [TextView]/[TextClock] views
-     * draw their text content inside [dispatchDraw]. Our strategy:
-     *  1. Zero all styledTextView paint alphas so children draw invisible glyph geometry.
-     *  2. Let super.dispatchDraw() execute — children place transparent pixels on canvas.
+     * We override [dispatchDraw] rather than [onDraw] so we can intercept after child views have
+     * laid out. Strategy:
+     *  1. Zero all styledTextView text colors → children produce transparent pixels.
+     *  2. super.dispatchDraw() runs — children draw invisible geometry.
      *  3. Restore text colors.
-     *  4. Draw the AxBlur pass clipped to the extracted glyph [Path].
+     *  4. Draw the source-blur pass clipped to the extracted glyph [Path].
      *
-     * This produces blurred wallpaper visible through the letter shapes with no solid fill on top.
-     * Falls through to normal rendering when blur is unavailable (doze, cross-window blur off, etc).
+     * IMPORTANT: We deliberately disable cross-window blur (BackgroundBlurDrawable) on the clock
+     * renderer and force the source-blur path instead. BackgroundBlurDrawable composites at the
+     * OS level and ignores canvas clip, causing the visible rectangular bounding-box artifact.
+     * The source-blur path renders via canvas.drawRenderNode() which respects canvas.clipPath(),
+     * so the glyph-shaped mask actually works.
+     *
+     * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
     override fun dispatchDraw(canvas: Canvas) {
         val renderer = clockBlurRenderer
+        // Source blur doesn't need isCrossWindowBlurActive(); it uses a RenderNode instead.
+        // We still guard on !isDozing (belt-and-suspenders alongside applyBlurState).
         val doBlur = renderer != null &&
             blurEnabled &&
             !isDozing &&
-            styledTextViews.isNotEmpty() &&
-            renderer.isCrossWindowBlurActive()
+            styledTextViews.isNotEmpty()
 
         if (doBlur) {
             suppressTextColors()
@@ -465,13 +474,18 @@ class ClockStyle @JvmOverloads constructor(
             if (glyphPathDirty) rebuildGlyphPath()
             if (!textGlyphPath.isEmpty) {
                 val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-                renderer!!.draw(
+                // overlayColor = TRANSPARENT: pure blur, no tint on top of the glyph shapes.
+                val drawn = renderer!!.draw(
                     canvas,
                     bounds,
                     textGlyphPath,
                     /* cornerRadius= */ 0f,
                     /* overlayColor= */ Color.TRANSPARENT,
                 )
+                if (!drawn) {
+                    // Source blur not ready yet — restore text so clock is visible this frame.
+                    restoreTextColorsIfNeeded()
+                }
             }
         }
     }
@@ -803,18 +817,43 @@ class ClockStyle @JvmOverloads constructor(
 
     /**
      * Creates or enables/disables the [AxBlurBackgroundRenderer] based on the current
-     * [blurEnabled] flag and clock state. Safe to call multiple times.
+     * [blurEnabled] and [isDozing] flags. Safe to call multiple times.
+     *
+     * **Source-blur path is forced here.** We call [setCrossWindowBlurEnabled(false)] so the
+     * SDK never creates a [BackgroundBlurDrawable]. BackgroundBlurDrawable composites at the OS
+     * compositor level and ignores canvas clip, producing a rectangular blurred box instead of
+     * a text-shaped cutout. The source-blur path (RenderNode + RenderEffect) renders into the
+     * canvas and fully respects [canvas.clipPath], which is what we use for glyph masking.
+     *
+     * We also call [setBlurRadiusPx] with a fixed 20 px radius rather than picking up the global
+     * system_blur_radius setting (which is calibrated for full notification-shade blur and is
+     * typically 40-80 px — far too strong for a frosted-glass text overlay).
      */
     private fun applyBlurState() {
-        if (blurEnabled && clockStyle != 0) {
-            val renderer = clockBlurRenderer ?: AxBlurBackgroundRenderer(
-                this,
-                AxBackdropBlurSettingsSpec.system(),
-                /* enabled= */ true,
-            ).also {
-                clockBlurRenderer = it
-                if (isAttachedToWindow) it.onAttachedToWindow()
+        val active = blurEnabled && clockStyle != 0 && !isDozing
+        if (active) {
+            val renderer = clockBlurRenderer ?: run {
+                // spec with disabled settings observer — we manage radius manually.
+                val spec = AxBackdropBlurSettingsSpec.system()
+                AxBlurBackgroundRenderer(
+                    this,
+                    spec,
+                    /* enabled= */ true,
+                ).also { r ->
+                    // Force source-blur path: disable compositor drawable so clipPath works.
+                    r.setCrossWindowBlurEnabled(false)
+                    r.setPreferSourceBlur(true)
+                    // Set the parent view as the blur source so we get the wallpaper content.
+                    // The parent of ClockStyle in the keyguard hierarchy is the lockscreen root.
+                    (parent as? View)?.let { r.setSourceView(it) }
+                    // Fixed 20 px — noticeably frosted but the wallpaper remains legible.
+                    r.setBlurRadiusPx(CLOCK_BLUR_RADIUS_PX)
+                    clockBlurRenderer = r
+                    if (isAttachedToWindow) r.onAttachedToWindow()
+                }
             }
+            // Re-sync source view in case parent changed since last enable.
+            (parent as? View)?.let { renderer.setSourceView(it) }
             renderer.setEnabled(true)
             setWillNotDraw(false)
             glyphPathDirty = true
@@ -823,6 +862,7 @@ class ClockStyle @JvmOverloads constructor(
             val renderer = clockBlurRenderer
             if (renderer != null) {
                 renderer.setEnabled(false)
+                renderer.setSourceView(null)
                 renderer.clear()
             }
         }
@@ -875,6 +915,14 @@ class ClockStyle @JvmOverloads constructor(
             }
         }
         savedTextColors.clear()
+    }
+
+    /**
+     * Restores text colors only if [savedTextColors] is non-empty.
+     * Called as a safety fallback when source blur isn't ready and the clock must remain visible.
+     */
+    private fun restoreTextColorsIfNeeded() {
+        if (savedTextColors.isNotEmpty()) restoreTextColors()
     }
 
     private fun removePendingLayoutListener() {
@@ -1162,6 +1210,12 @@ class ClockStyle @JvmOverloads constructor(
         const val COLOR_MODE_CUSTOM = "custom"
 
         private const val DOZE_PULSE_ACTION = "com.android.systemui.doze.pulse"
+
+        /** Blur radius for the frosted-glass text cutout, in pixels.
+         *  20 px gives a noticeably frosted effect while keeping the wallpaper legible.
+         *  The global system_blur_radius (used by notification shade) is typically 40-80 px —
+         *  far too aggressive for a text overlay. */
+        private const val CLOCK_BLUR_RADIUS_PX = 20f
 
         private const val DEFAULT_STYLE = 0
         private const val DEFAULT_OPACITY = 100
