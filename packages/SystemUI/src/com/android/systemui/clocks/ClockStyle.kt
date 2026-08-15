@@ -468,12 +468,18 @@ class ClockStyle @JvmOverloads constructor(
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
     override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        
         val renderer = clockBlurRenderer
         if (renderer != null && blurEnabled && !isDozing) {
+            if (glyphPathDirty) rebuildGlyphPath()
+            
+            canvas.save()
+            canvas.clipPath(textGlyphPath)
             val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
             renderer.draw(canvas, bounds, null, 24f, Color.argb(40, 255, 255, 255))
+            canvas.restore()
         }
-        super.dispatchDraw(canvas)
     }
 
     private fun forceTimeUpdate() {
@@ -814,6 +820,7 @@ class ClockStyle @JvmOverloads constructor(
      * We also call [setBlurRadiusPx] with a fixed 20 px radius rather than picking up the global
      * system_blur_radius setting (which is calibrated for full notification-shade blur and is
      * typically 40-80 px — far too strong for a frosted-glass text overlay).
+     */
     private fun applyBlurState() {
         val active = blurEnabled && clockStyle != 0 && !isDozing
         if (active) {
