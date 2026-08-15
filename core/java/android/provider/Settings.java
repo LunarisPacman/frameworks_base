@@ -15199,6 +15199,13 @@ public final class Settings {
          */
         public static final String LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_RADIUS = "lock_screen_custom_clock_gradient_radius";
 
+        /**
+         * Whether the custom clock renders as a frosted-glass blur cutout.
+         * 1 = enabled, 0 = disabled (default).
+         * @hide
+         */
+        public static final String LOCK_SCREEN_CUSTOM_CLOCK_BLUR_TEXT =
+                "lock_screen_custom_clock_blur_text";
 
         /**
          * Timeout length for clipboard auto clear

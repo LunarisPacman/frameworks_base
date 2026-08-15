@@ -13,12 +13,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Color.colorToHSV
 import android.graphics.Color.HSVToColor
 import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
@@ -37,6 +42,8 @@ import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextClock
 import android.widget.TextView
+import com.android.axion.blur.AxBlurBackgroundRenderer
+import com.android.axion.blur.model.AxBackdropBlurSettingsSpec
 import com.android.systemui.Dependency
 import com.android.systemui.media.MediaSessionManager
 import com.android.systemui.plugins.statusbar.StatusBarStateController
@@ -99,6 +106,18 @@ class ClockStyle @JvmOverloads constructor(
     private var clockWobbleOnChargeEnabled = true
     private var wobbleAnimator: ObjectAnimator? = null
     private var wobbleGlowAnimator: android.animation.ValueAnimator? = null
+
+    // --- Frosted-glass blur fields ---
+    private var blurEnabled = false
+    private var clockBlurRenderer: AxBlurBackgroundRenderer? = null
+    /** Accumulated glyph outline path, built in ClockStyle coordinate space. */
+    private val textGlyphPath = Path()
+    /** Scratch paint used only for getTextPath — never renders directly. */
+    private val glyphBuildPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** True whenever the glyph path must be rebuilt before the next blur draw. */
+    private var glyphPathDirty = true
+    /** Saved original text colors for each styled view, used during blur draw pass. */
+    private val savedTextColors = ArrayList<Int>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -191,6 +210,7 @@ class ClockStyle @JvmOverloads constructor(
             CLOCK_GRADIENT_COLOR_END_KEY,
             CLOCK_GRADIENT_ANCHOR_Y_KEY,
             CLOCK_GRADIENT_RADIUS_KEY,
+            CLOCK_BLUR_TEXT_KEY,
         )
         statusBarStateController.addCallback(statusBarStateListener)
         if (albumArtColorEnabled) {
@@ -214,6 +234,7 @@ class ClockStyle @JvmOverloads constructor(
             addAction(Intent.ACTION_POWER_DISCONNECTED)
         }
         context.registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        clockBlurRenderer?.onAttachedToWindow()
         callbacksRegistered = true
     }
 
@@ -230,7 +251,17 @@ class ClockStyle @JvmOverloads constructor(
         cancelWobbleAnimation()
         removePendingLayoutListener()
         runCatching { context.unregisterReceiver(screenReceiver) }
+        clockBlurRenderer?.onDetachedFromWindow()
         callbacksRegistered = false
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        clockBlurRenderer?.onVisibilityAggregated(isVisible)
+    }
+
+    override fun verifyDrawable(who: Drawable): Boolean {
+        return clockBlurRenderer?.verifyDrawable(who) == true || super.verifyDrawable(who)
     }
 
     override fun onTuningChanged(key: String?, newValue: String?) {
@@ -317,6 +348,10 @@ class ClockStyle @JvmOverloads constructor(
                     .coerceIn(MIN_GRADIENT_RADIUS, MAX_GRADIENT_RADIUS)
                 if (gradientEnabled) applyClockColors()
             }
+            CLOCK_BLUR_TEXT_KEY -> {
+                blurEnabled = TunerService.parseInteger(newValue, 0) != 0
+                applyBlurState()
+            }
         }
     }
 
@@ -400,8 +435,51 @@ class ClockStyle @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Draws the frosted-glass clock text blur effect.
+     *
+     * We override [dispatchDraw] rather than [onDraw] because child [TextView]/[TextClock] views
+     * draw their text content inside [dispatchDraw]. Our strategy:
+     *  1. Zero all styledTextView paint alphas so children draw invisible glyph geometry.
+     *  2. Let super.dispatchDraw() execute — children place transparent pixels on canvas.
+     *  3. Restore text colors.
+     *  4. Draw the AxBlur pass clipped to the extracted glyph [Path].
+     *
+     * This produces blurred wallpaper visible through the letter shapes with no solid fill on top.
+     * Falls through to normal rendering when blur is unavailable (doze, cross-window blur off, etc).
+     */
+    override fun dispatchDraw(canvas: Canvas) {
+        val renderer = clockBlurRenderer
+        val doBlur = renderer != null &&
+            blurEnabled &&
+            !isDozing &&
+            styledTextViews.isNotEmpty() &&
+            renderer.isCrossWindowBlurActive()
+
+        if (doBlur) {
+            suppressTextColors()
+        }
+        super.dispatchDraw(canvas)
+        if (doBlur) {
+            restoreTextColors()
+            if (glyphPathDirty) rebuildGlyphPath()
+            if (!textGlyphPath.isEmpty) {
+                val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
+                renderer!!.draw(
+                    canvas,
+                    bounds,
+                    textGlyphPath,
+                    /* cornerRadius= */ 0f,
+                    /* overlayColor= */ Color.TRANSPARENT,
+                )
+            }
+        }
+    }
+
     private fun forceTimeUpdate() {
         if (currentClockView == null) return
+        // Glyph path must be rebuilt whenever displayed text changes.
+        glyphPathDirty = true
         for (i in styledTextViews.indices) {
             val tv = styledTextViews[i]
             if (tv is TextClock) continue
@@ -421,6 +499,8 @@ class ClockStyle @JvmOverloads constructor(
         currentClockView = null
         textClocks.clear()
         styledTextViews.clear()
+        savedTextColors.clear()
+        glyphPathDirty = true
         naturalClockHeight = 0
         clockContainer?.minimumHeight = 0
 
@@ -717,6 +797,86 @@ class ClockStyle @JvmOverloads constructor(
         view.addOnLayoutChangeListener(listener)
     }
 
+    // -------------------------------------------------------------------------
+    // Blur helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Creates or enables/disables the [AxBlurBackgroundRenderer] based on the current
+     * [blurEnabled] flag and clock state. Safe to call multiple times.
+     */
+    private fun applyBlurState() {
+        if (blurEnabled && clockStyle != 0) {
+            val renderer = clockBlurRenderer ?: AxBlurBackgroundRenderer(
+                this,
+                AxBackdropBlurSettingsSpec.system(),
+                /* enabled= */ true,
+            ).also {
+                clockBlurRenderer = it
+                if (isAttachedToWindow) it.onAttachedToWindow()
+            }
+            renderer.setEnabled(true)
+            setWillNotDraw(false)
+            glyphPathDirty = true
+            invalidate()
+        } else {
+            val renderer = clockBlurRenderer
+            if (renderer != null) {
+                renderer.setEnabled(false)
+                renderer.clear()
+            }
+        }
+    }
+
+    /**
+     * Rebuilds [textGlyphPath] from the current text content of all [styledTextViews].
+     *
+     * The path is in [ClockStyle] coordinate space. Coordinates are obtained by walking the
+     * view hierarchy from each text view up to this layout ([getOffsetWithinAncestor]).
+     * The baseline is approximated from font metrics and the view's measured height.
+     */
+    private fun rebuildGlyphPath() {
+        textGlyphPath.rewind()
+        for (i in styledTextViews.indices) {
+            val tv = styledTextViews[i]
+            val text = tv.text?.toString() ?: continue
+            if (text.isEmpty() || tv.width <= 0 || tv.height <= 0) continue
+            val paint = tv.paint ?: continue
+            glyphBuildPaint.set(paint)
+            val (dx, dy) = getOffsetWithinAncestor(tv, this)
+            val fm = paint.fontMetrics
+            // Vertical centre of the text block within the view, adjusted for font metrics.
+            val baseline = dy.toFloat() + tv.height / 2f - (fm.ascent + fm.descent) / 2f
+            val linePath = Path()
+            glyphBuildPaint.getTextPath(text, 0, text.length, dx.toFloat(), baseline, linePath)
+            textGlyphPath.addPath(linePath)
+        }
+        glyphPathDirty = false
+    }
+
+    /**
+     * Saves and zeroes the text-paint alpha for every [styledTextViews] entry so that children
+     * draw invisible geometry during the blur pass.
+     */
+    private fun suppressTextColors() {
+        savedTextColors.clear()
+        for (i in styledTextViews.indices) {
+            val tv = styledTextViews[i]
+            savedTextColors.add(tv.currentTextColor)
+            tv.setTextColor(Color.TRANSPARENT)
+        }
+    }
+
+    /** Restores text colors saved by [suppressTextColors]. */
+    private fun restoreTextColors() {
+        for (i in styledTextViews.indices) {
+            if (i < savedTextColors.size) {
+                styledTextViews[i].setTextColor(savedTextColors[i])
+            }
+        }
+        savedTextColors.clear()
+    }
+
     private fun removePendingLayoutListener() {
         pendingLayoutListener?.let { currentClockView?.removeOnLayoutChangeListener(it) }
         pendingLayoutListener = null
@@ -995,6 +1155,7 @@ class ClockStyle @JvmOverloads constructor(
         @JvmField val CLOCK_GRADIENT_COLOR_END_KEY: String = Settings.Secure.LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_COLOR_END
         @JvmField val CLOCK_GRADIENT_ANCHOR_Y_KEY: String = Settings.Secure.LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_ANCHOR_Y
         @JvmField val CLOCK_GRADIENT_RADIUS_KEY: String = Settings.Secure.LOCK_SCREEN_CUSTOM_CLOCK_GRADIENT_RADIUS
+        @JvmField val CLOCK_BLUR_TEXT_KEY: String = Settings.Secure.LOCK_SCREEN_CUSTOM_CLOCK_BLUR_TEXT
 
         const val COLOR_MODE_DEFAULT = "default"
         const val COLOR_MODE_ACCENT = "accent"
