@@ -456,50 +456,7 @@ class ClockStyle @JvmOverloads constructor(
      *
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
-    override fun draw(canvas: Canvas) {
-        if (isCapturingBlur) {
-            return
-        }
-        super.draw(canvas)
-    }
-
     override fun dispatchDraw(canvas: Canvas) {
-        val active = blurEnabled && clockStyle != 0 && !isDozing
-        if (active && width > 0 && height > 0) {
-            val parentView = parent as? View
-            if (parentView != null) {
-                val node = clockRenderNode ?: RenderNode("ClockStyleBlur").also {
-                    it.setRenderEffect(RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP))
-                    clockRenderNode = it
-                }
-                node.setPosition(0, 0, width, height)
-
-                isCapturingBlur = true
-                val recordingCanvas = node.beginRecording(width, height)
-                recordingCanvas.translate(-left.toFloat(), -top.toFloat())
-                try {
-                    parentView.draw(recordingCanvas)
-                } catch (e: Exception) {
-                    // Ignore drawing exceptions during background snapshot
-                } finally {
-                    node.endRecording()
-                    isCapturingBlur = false
-                }
-
-                if (glyphPathDirty) rebuildGlyphPath()
-
-                suppressTextColors()
-                super.dispatchDraw(canvas)
-                restoreTextColors()
-
-                canvas.save()
-                canvas.clipPath(textGlyphPath)
-                canvas.drawRenderNode(node)
-                canvas.drawPath(textGlyphPath, frostedOverlayPaint)
-                canvas.restore()
-                return
-            }
-        }
         super.dispatchDraw(canvas)
     }
 
