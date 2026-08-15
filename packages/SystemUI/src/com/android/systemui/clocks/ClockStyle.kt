@@ -468,17 +468,21 @@ class ClockStyle @JvmOverloads constructor(
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
     override fun dispatchDraw(canvas: Canvas) {
-        super.dispatchDraw(canvas)
-        
         val renderer = clockBlurRenderer
         if (renderer != null && blurEnabled && !isDozing) {
             if (glyphPathDirty) rebuildGlyphPath()
-            
+
+            suppressTextColors()
+            super.dispatchDraw(canvas)
+            restoreTextColors()
+
             canvas.save()
             canvas.clipPath(textGlyphPath)
             val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            renderer.draw(canvas, bounds, null, 24f, Color.argb(40, 255, 255, 255))
+            renderer.draw(canvas, bounds, textGlyphPath, 0f, Color.argb(40, 255, 255, 255))
             canvas.restore()
+        } else {
+            super.dispatchDraw(canvas)
         }
     }
 
@@ -826,6 +830,10 @@ class ClockStyle @JvmOverloads constructor(
         if (active) {
             val renderer = clockBlurRenderer ?: run {
                 AxBlurBackgroundRenderer(this).also { r ->
+                    r.setCrossWindowBlurEnabled(false)
+                    r.setPreferSourceBlur(true)
+                    r.setBlurRadiusPx(20f)
+                    (parent as? View)?.let { p -> r.setSourceView(p) }
                     clockBlurRenderer = r
                     if (isAttachedToWindow) r.onAttachedToWindow()
                 }
@@ -838,12 +846,27 @@ class ClockStyle @JvmOverloads constructor(
         }
     }
 
+    private fun getMatrixRelativeToAncestor(view: View, ancestor: View): Matrix {
+        val matrix = Matrix()
+        var current: View? = view
+        val chain = mutableListOf<View>()
+        while (current != null && current !== ancestor) {
+            chain.add(current)
+            current = current.parent as? View
+        }
+        for (i in chain.indices.reversed()) {
+            val v = chain[i]
+            matrix.postTranslate(v.left.toFloat(), v.top.toFloat())
+            matrix.postConcat(v.matrix)
+        }
+        return matrix
+    }
+
     /**
      * Rebuilds [textGlyphPath] from the current text content of all [styledTextViews].
      *
-     * The path is in [ClockStyle] coordinate space. Coordinates are obtained by walking the
-     * view hierarchy from each text view up to this layout ([getOffsetWithinAncestor]).
-     * The baseline is approximated from font metrics and the view's measured height.
+     * The path is transformed to [ClockStyle] coordinate space using each view's full
+     * matrix transformation chain (handling scale, pivot, translation, and layout left/top).
      */
     private fun rebuildGlyphPath() {
         textGlyphPath.rewind()
@@ -853,12 +876,16 @@ class ClockStyle @JvmOverloads constructor(
             if (text.isEmpty() || tv.width <= 0 || tv.height <= 0) continue
             val paint = tv.paint ?: continue
             glyphBuildPaint.set(paint)
-            val (dx, dy) = getOffsetWithinAncestor(tv, this)
+
             val fm = paint.fontMetrics
-            // Vertical centre of the text block within the view, adjusted for font metrics.
-            val baseline = dy.toFloat() + tv.height / 2f - (fm.ascent + fm.descent) / 2f
+            val x = tv.totalPaddingLeft.toFloat()
+            val y = if (tv.baseline != -1) tv.baseline.toFloat() else (tv.height / 2f - (fm.ascent + fm.descent) / 2f)
+
             val linePath = Path()
-            glyphBuildPaint.getTextPath(text, 0, text.length, dx.toFloat(), baseline, linePath)
+            glyphBuildPaint.getTextPath(text, 0, text.length, x, y, linePath)
+
+            val matrix = getMatrixRelativeToAncestor(tv, this)
+            linePath.transform(matrix)
             textGlyphPath.addPath(linePath)
         }
         glyphPathDirty = false
