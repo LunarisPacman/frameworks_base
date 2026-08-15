@@ -468,22 +468,12 @@ class ClockStyle @JvmOverloads constructor(
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
     override fun dispatchDraw(canvas: Canvas) {
-        val doBlur = blurEnabled && !isDozing && styledTextViews.isNotEmpty()
-
-        if (doBlur) {
-            suppressTextColors()
+        val renderer = clockBlurRenderer
+        if (renderer != null && blurEnabled && !isDozing) {
+            val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
+            renderer.draw(canvas, bounds, null, 24f, Color.argb(40, 255, 255, 255))
         }
         super.dispatchDraw(canvas)
-        if (doBlur) {
-            restoreTextColors()
-            if (glyphPathDirty) rebuildGlyphPath()
-            if (!textGlyphPath.isEmpty) {
-                val drawn = drawFrostedGlassText(canvas)
-                if (!drawn) {
-                    restoreTextColorsIfNeeded()
-                }
-            }
-        }
     }
 
     private fun forceTimeUpdate() {
@@ -824,187 +814,21 @@ class ClockStyle @JvmOverloads constructor(
      * We also call [setBlurRadiusPx] with a fixed 20 px radius rather than picking up the global
      * system_blur_radius setting (which is calibrated for full notification-shade blur and is
      * typically 40-80 px — far too strong for a frosted-glass text overlay).
-     */
     private fun applyBlurState() {
-        if (blurEnabled && clockStyle != 0 && !isDozing) {
-            lastWallpaperBuildTime = 0L // Force refresh shader
+        val active = blurEnabled && clockStyle != 0 && !isDozing
+        if (active) {
+            val renderer = clockBlurRenderer ?: run {
+                AxBlurBackgroundRenderer(this).also { r ->
+                    clockBlurRenderer = r
+                    if (isAttachedToWindow) r.onAttachedToWindow()
+                }
+            }
+            renderer.setEnabled(true)
             setWillNotDraw(false)
-            glyphPathDirty = true
             invalidate()
         } else {
-            wallpaperBlurShader = null
+            clockBlurRenderer?.setEnabled(false)
         }
-    }
-
-    private fun ensureWallpaperBlurShader(): Boolean {
-        if (wallpaperBlurShader != null && (System.currentTimeMillis() - lastWallpaperBuildTime < 60000)) {
-            return true
-        }
-        return try {
-            val wm = WallpaperManager.getInstance(context)
-            val drawable = wm.drawable ?: wm.peekDrawable() ?: return false
-            val metrics = context.resources.displayMetrics
-            val screenW = metrics.widthPixels
-            val screenH = metrics.heightPixels
-            if (screenW <= 0 || screenH <= 0) return false
-
-            val scaledW = (screenW / 4).coerceAtLeast(100)
-            val scaledH = (screenH / 4).coerceAtLeast(100)
-
-            val bitmap = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
-            val c = Canvas(bitmap)
-            drawable.setBounds(0, 0, scaledW, scaledH)
-            drawable.draw(c)
-
-            val blurred = stackBlurBitmap(bitmap, 12)
-            val shader = BitmapShader(blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-            wallpaperBlurShader = shader
-            lastWallpaperBuildTime = System.currentTimeMillis()
-            true
-        } catch (e: Exception) {
-            wallpaperBlurShader = null
-            false
-        }
-    }
-
-    private fun drawFrostedGlassText(canvas: Canvas): Boolean {
-        if (!ensureWallpaperBlurShader()) return false
-        val shader = wallpaperBlurShader ?: return false
-        val metrics = context.resources.displayMetrics
-        val screenW = metrics.widthPixels.toFloat()
-        val screenH = metrics.heightPixels.toFloat()
-        val scaledW = (metrics.widthPixels / 4).coerceAtLeast(100).toFloat()
-        val scaledH = (metrics.heightPixels / 4).coerceAtLeast(100).toFloat()
-
-        val loc = IntArray(2)
-        getLocationOnScreen(loc)
-
-        val matrix = Matrix()
-        matrix.setScale(screenW / scaledW, screenH / scaledH)
-        matrix.postTranslate(-loc[0].toFloat(), -loc[1].toFloat())
-        shader.setLocalMatrix(matrix)
-
-        frostedPaint.shader = shader
-        canvas.drawPath(textGlyphPath, frostedPaint)
-        canvas.drawPath(textGlyphPath, frostedOverlayPaint)
-        return true
-    }
-
-    private fun stackBlurBitmap(sentBitmap: Bitmap, radius: Int): Bitmap {
-        val config = sentBitmap.config ?: Bitmap.Config.ARGB_8888
-        val bitmap = sentBitmap.copy(config, true)
-        if (radius < 1) return bitmap
-        val w = bitmap.width
-        val h = bitmap.height
-        val pix = IntArray(w * h)
-        bitmap.getPixels(pix, 0, w, 0, 0, w, h)
-        val wm = w - 1
-        val hm = h - 1
-        val wh = w * h
-        val div = radius + radius + 1
-        val r = IntArray(wh)
-        val g = IntArray(wh)
-        val b = IntArray(wh)
-        var rsum: Int; var gsum: Int; var bsum: Int; var x: Int; var y: Int; var i: Int; var p: Int; var yp: Int; var yi: Int; var yw: Int
-        val vmin = IntArray(Math.max(w, h))
-        var divsum = div + 1 shr 1
-        divsum *= divsum
-        val dv = IntArray(256 * divsum)
-        i = 0
-        while (i < 256 * divsum) { dv[i] = i / divsum; i++ }
-        yw = 0; yi = 0
-        val stack = Array(div) { IntArray(3) }
-        var stackpointer: Int; var stackstart: Int; var rbs: Int
-        val r1 = radius + 1
-        var rsumin: Int; var gsumin: Int; var bsumin: Int; var rsumout: Int; var gsumout: Int; var bsumout: Int
-        y = 0
-        while (y < h) {
-            bsum = 0; gsum = bsum; rsum = gsum
-            bsumin = 0; gsumin = bsumin; rsumin = gsumin
-            bsumout = 0; gsumout = bsumout; rsumout = gsumout
-            i = -radius
-            while (i <= radius) {
-                p = pix[yi + Math.min(wm, Math.max(i, 0))]
-                val sir = stack[i + radius]
-                sir[0] = p and 0xff0000 shr 16
-                sir[1] = p and 0x00ff00 shr 8
-                sir[2] = p and 0x0000ff
-                rbs = r1 - Math.abs(i)
-                rsum += sir[0] * rbs
-                gsum += sir[1] * rbs
-                bsum += sir[2] * rbs
-                if (i > 0) { rsumin += sir[0]; gsumin += sir[1]; bsumin += sir[2] }
-                else { rsumout += sir[0]; gsumout += sir[1]; bsumout += sir[2] }
-                i++
-            }
-            stackpointer = radius
-            x = 0
-            while (x < w) {
-                r[yi] = dv[rsum]; g[yi] = dv[gsum]; b[yi] = dv[bsum]
-                rsum -= rsumout; gsum -= gsumout; bsum -= bsumout
-                stackstart = stackpointer - radius + div
-                val sir = stack[stackstart % div]
-                rsumout -= sir[0]; gsumout -= sir[1]; bsumout -= sir[2]
-                if (y == 0) { vmin[x] = Math.min(x + radius + 1, wm) }
-                p = pix[yw + vmin[x]]
-                sir[0] = p and 0xff0000 shr 16
-                sir[1] = p and 0x00ff00 shr 8
-                sir[2] = p and 0x0000ff
-                rsumin += sir[0]; gsumin += sir[1]; bsumin += sir[2]
-                rsum += rsumin; gsum += gsumin; bsum += bsumin
-                stackpointer = stackpointer + 1 % div
-                val sir2 = stack[stackpointer % div]
-                rsumout += sir2[0]; gsumout += sir2[1]; bsumout += sir2[2]
-                rsumin -= sir2[0]; gsumin -= sir2[1]; bsumin -= sir2[2]
-                yi++; x++
-            }
-            yw += w
-            y++
-        }
-        x = 0
-        while (x < w) {
-            bsum = 0; gsum = bsum; rsum = gsum
-            bsumin = 0; gsumin = bsumin; rsumin = gsumin
-            bsumout = 0; gsumout = bsumout; rsumout = gsumout
-            yp = -radius * w
-            i = -radius
-            while (i <= radius) {
-                yi = Math.max(0, yp) + x
-                val sir = stack[i + radius]
-                sir[0] = r[yi]; sir[1] = g[yi]; sir[2] = b[yi]
-                rbs = r1 - Math.abs(i)
-                rsum += r[yi] * rbs
-                gsum += r[yi] * rbs
-                bsum += b[yi] * rbs
-                if (i > 0) { rsumin += sir[0]; gsumin += sir[1]; bsumin += sir[2] }
-                else { rsumout += sir[0]; gsumout += sir[1]; bsumout += sir[2] }
-                if (i < hm) { yp += w }
-                i++
-            }
-            yi = x
-            stackpointer = radius
-            y = 0
-            while (y < h) {
-                pix[yi] = -0x1000000 and pix[yi] or (dv[rsum] shl 16) or (dv[gsum] shl 8) or dv[bsum]
-                rsum -= rsumout; gsum -= gsumout; bsum -= bsumout
-                stackstart = stackpointer - radius + div
-                val sir = stack[stackstart % div]
-                rsumout -= sir[0]; gsumout -= sir[1]; bsumout -= sir[2]
-                if (x == 0) { vmin[y] = Math.min(y + r1, hm) * w }
-                p = x + vmin[y]
-                sir[0] = r[p]; sir[1] = g[p]; sir[2] = b[p]
-                rsumin += sir[0]; gsumin += sir[1]; bsumin += sir[2]
-                rsum += rsumin; gsum += gsumin; bsum += bsumin
-                stackpointer = stackpointer + 1 % div
-                val sir2 = stack[stackpointer % div]
-                rsumout += sir2[0]; gsumout += sir2[1]; bsumout += sir2[2]
-                rsumin -= sir2[0]; gsumin -= sir2[1]; bsumin -= sir2[2]
-                yi += w; y++
-            }
-            x++
-        }
-        bitmap.setPixels(pix, 0, w, 0, 0, w, h)
-        return bitmap
     }
 
     /**
