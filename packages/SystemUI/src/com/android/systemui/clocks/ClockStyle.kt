@@ -25,6 +25,8 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -113,7 +115,8 @@ class ClockStyle @JvmOverloads constructor(
 
     // --- Frosted-glass blur fields ---
     private var blurEnabled = false
-    private var clockBlurRenderer: AxBlurBackgroundRenderer? = null
+    private var clockRenderNode: RenderNode? = null
+    private var isCapturingBlur = false
     /** Accumulated glyph outline path, built in ClockStyle coordinate space. */
     private val textGlyphPath = Path()
     /** Scratch paint used only for getTextPath — never renders directly. */
@@ -123,9 +126,6 @@ class ClockStyle @JvmOverloads constructor(
     /** Saved original text colors for each styled view, used during blur draw pass. */
     private val savedTextColors = ArrayList<Int>()
 
-    private var wallpaperBlurShader: BitmapShader? = null
-    private var lastWallpaperBuildTime = 0L
-    private val frostedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val frostedOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(45, 255, 255, 255)
     }
@@ -245,7 +245,6 @@ class ClockStyle @JvmOverloads constructor(
             addAction(Intent.ACTION_POWER_DISCONNECTED)
         }
         context.registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        clockBlurRenderer?.onAttachedToWindow()
         callbacksRegistered = true
     }
 
@@ -262,17 +261,7 @@ class ClockStyle @JvmOverloads constructor(
         cancelWobbleAnimation()
         removePendingLayoutListener()
         runCatching { context.unregisterReceiver(screenReceiver) }
-        clockBlurRenderer?.onDetachedFromWindow()
         callbacksRegistered = false
-    }
-
-    override fun onVisibilityAggregated(isVisible: Boolean) {
-        super.onVisibilityAggregated(isVisible)
-        clockBlurRenderer?.onVisibilityAggregated(isVisible)
-    }
-
-    override fun verifyDrawable(who: Drawable): Boolean {
-        return clockBlurRenderer?.verifyDrawable(who) == true || super.verifyDrawable(who)
     }
 
     override fun onTuningChanged(key: String?, newValue: String?) {
@@ -467,23 +456,51 @@ class ClockStyle @JvmOverloads constructor(
      *
      * Falls through to normal rendering when blur is unavailable (doze, source not set, etc).
      */
-    override fun dispatchDraw(canvas: Canvas) {
-        val renderer = clockBlurRenderer
-        if (renderer != null && blurEnabled && !isDozing) {
-            if (glyphPathDirty) rebuildGlyphPath()
-
-            suppressTextColors()
-            super.dispatchDraw(canvas)
-            restoreTextColors()
-
-            canvas.save()
-            canvas.clipPath(textGlyphPath)
-            val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            renderer.draw(canvas, bounds, textGlyphPath, 0f, Color.argb(40, 255, 255, 255))
-            canvas.restore()
-        } else {
-            super.dispatchDraw(canvas)
+    override fun draw(canvas: Canvas) {
+        if (isCapturingBlur) {
+            return
         }
+        super.draw(canvas)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val active = blurEnabled && clockStyle != 0 && !isDozing
+        if (active && width > 0 && height > 0) {
+            val parentView = parent as? View
+            if (parentView != null) {
+                val node = clockRenderNode ?: RenderNode("ClockStyleBlur").also {
+                    it.setRenderEffect(RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP))
+                    clockRenderNode = it
+                }
+                node.setPosition(0, 0, width, height)
+
+                isCapturingBlur = true
+                val recordingCanvas = node.beginRecording(width, height)
+                recordingCanvas.translate(-left.toFloat(), -top.toFloat())
+                try {
+                    parentView.draw(recordingCanvas)
+                } catch (e: Exception) {
+                    // Ignore drawing exceptions during background snapshot
+                } finally {
+                    node.endRecording()
+                    isCapturingBlur = false
+                }
+
+                if (glyphPathDirty) rebuildGlyphPath()
+
+                suppressTextColors()
+                super.dispatchDraw(canvas)
+                restoreTextColors()
+
+                canvas.save()
+                canvas.clipPath(textGlyphPath)
+                canvas.drawRenderNode(node)
+                canvas.drawPath(textGlyphPath, frostedOverlayPaint)
+                canvas.restore()
+                return
+            }
+        }
+        super.dispatchDraw(canvas)
     }
 
     private fun forceTimeUpdate() {
@@ -812,37 +829,13 @@ class ClockStyle @JvmOverloads constructor(
     // -------------------------------------------------------------------------
 
     /**
-     * Creates or enables/disables the [AxBlurBackgroundRenderer] based on the current
-     * [blurEnabled] and [isDozing] flags. Safe to call multiple times.
-     *
-     * **Source-blur path is forced here.** We call [setCrossWindowBlurEnabled(false)] so the
-     * SDK never creates a [BackgroundBlurDrawable]. BackgroundBlurDrawable composites at the OS
-     * compositor level and ignores canvas clip, producing a rectangular blurred box instead of
-     * a text-shaped cutout. The source-blur path (RenderNode + RenderEffect) renders into the
-     * canvas and fully respects [canvas.clipPath], which is what we use for glyph masking.
-     *
-     * We also call [setBlurRadiusPx] with a fixed 20 px radius rather than picking up the global
-     * system_blur_radius setting (which is calibrated for full notification-shade blur and is
-     * typically 40-80 px — far too strong for a frosted-glass text overlay).
+     * Enables or disables frosted-glass blur drawing based on [blurEnabled] and [isDozing].
      */
     private fun applyBlurState() {
         val active = blurEnabled && clockStyle != 0 && !isDozing
         if (active) {
-            val renderer = clockBlurRenderer ?: run {
-                AxBlurBackgroundRenderer(this).also { r ->
-                    r.setCrossWindowBlurEnabled(false)
-                    r.setPreferSourceBlur(true)
-                    r.setBlurRadiusPx(20f)
-                    (parent as? View)?.let { p -> r.setSourceView(p) }
-                    clockBlurRenderer = r
-                    if (isAttachedToWindow) r.onAttachedToWindow()
-                }
-            }
-            renderer.setEnabled(true)
             setWillNotDraw(false)
             invalidate()
-        } else {
-            clockBlurRenderer?.setEnabled(false)
         }
     }
 
