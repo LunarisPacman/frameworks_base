@@ -891,7 +891,8 @@ class ClockStyle @JvmOverloads constructor(
     }
 
     private fun stackBlurBitmap(sentBitmap: Bitmap, radius: Int): Bitmap {
-        val bitmap = sentBitmap.copy(sentBitmap.config, true)
+        val config = sentBitmap.config ?: Bitmap.Config.ARGB_8888
+        val bitmap = sentBitmap.copy(config, true)
         if (radius < 1) return bitmap
         val w = bitmap.width
         val h = bitmap.height
