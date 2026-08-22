@@ -133,13 +133,12 @@ private val ActionIconSize = SizeBadge
 private val BatteryIconSize = ChipHeight - SpaceXxl
 private val CountBadgeHeight = ChipHeight / 2
 
-private class MusicPillBlurHost(context: Context) : View(context) {
+private class KeyguardPillBlurHost(context: Context) : View(context) {
     private val blur = AxBlurBackgroundRenderer(this)
     private val overlayColor = AxBlurColors.surfaceLightTint(context)
 
     private val bgDrawable: GradientDrawable = GradientDrawable().also { d ->
         d.setColor(0x00000000)
-        d.cornerRadius = context.resources.displayMetrics.density * 50f
     }
 
     override fun onAttachedToWindow() {
@@ -163,6 +162,7 @@ private class MusicPillBlurHost(context: Context) : View(context) {
     override fun draw(canvas: Canvas) {
         if (width > 0 && height > 0) {
             bgDrawable.setBounds(0, 0, width, height)
+            bgDrawable.cornerRadius = height * 0.5f
             if (!blur.drawBackgroundWithOverlayColor(canvas, bgDrawable, overlayColor)) {
                 bgDrawable.setColor(overlayColor and 0x00FFFFFF or (0xCC shl 24))
                 bgDrawable.draw(canvas)
@@ -307,8 +307,13 @@ fun AxDynamicBarKeyguardChip(
                         MaterialTheme.motionScheme.fastEffectsSpec(),
                         label = "kg_accent",
                     )
+                    val targetContentColor = if (event is IslandEvent.Charging) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        chipContentColorOn(rawAccent)
+                    }
                     val contentColor by animateColorAsState(
-                        chipContentColorOn(rawAccent),
+                        targetContentColor,
                         MaterialTheme.motionScheme.fastEffectsSpec(),
                         label = "kg_content",
                     )
@@ -372,9 +377,11 @@ private fun KeyguardChipBody(
     val motionScheme = MaterialTheme.motionScheme
     var toggleCount by remember { mutableIntStateOf(0) }
     val isMedia = event is IslandEvent.Media
+    val isCharging = event is IslandEvent.Charging
+    val isBlurred = isMedia || isCharging
 
     val parts = rememberChargingParts(batteryString)
-    val isMultiLineCharging = event is IslandEvent.Charging && parts.size >= 2
+    val isMultiLineCharging = isCharging && parts.size >= 2
     val dynamicHeight = when {
         isMedia -> MusicChipHeight
         isMultiLineCharging -> 48.dp
@@ -383,13 +390,13 @@ private fun KeyguardChipBody(
     val dynamicMinWidth = if (isMedia) MusicChipMinWidth else 48.dp
 
     Box(contentAlignment = Alignment.Center) {
-        if (isMedia) {
+        if (isBlurred) {
             Box(
                 modifier = Modifier
                     .matchParentSize(),
             ) {
                 AndroidView(
-                    factory = { ctx -> MusicPillBlurHost(ctx) },
+                    factory = { ctx -> KeyguardPillBlurHost(ctx) },
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(ChipShape),
@@ -402,7 +409,7 @@ private fun KeyguardChipBody(
                 .widthIn(min = dynamicMinWidth, max = 180.dp)
                 .clip(ChipShape)
                 .squishAnimation(toggleCount)
-                .background(if (isMedia) Color.Transparent else accent)
+                .background(if (isBlurred) Color.Transparent else accent)
                 .animateContentSize(motionScheme.defaultSpatialSpec())
                 .then(
                     if (progress != null) {
@@ -644,18 +651,29 @@ private fun KeyguardBatteryChip(
         info.isPowerSave -> BatteryPowerSaveColor
         else -> BatteryNeutralColor
     }
-    val contentColor = chipContentColorOn(accent)
+    val contentColor = MaterialTheme.colorScheme.onSurface
 
     val parts = rememberChargingParts(batteryString)
     val isMultiLine = info.isCharging && parts.size >= 2
     val dynamicHeight = if (isMultiLine) 48.dp else ChipHeight
 
     Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .matchParentSize(),
+        ) {
+            AndroidView(
+                factory = { ctx -> KeyguardPillBlurHost(ctx) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(ChipShape),
+            )
+        }
         Row(
             modifier = modifier
                 .height(dynamicHeight)
                 .clip(ChipShape)
-                .background(accent)
+                .background(Color.Transparent)
                 .widthIn(min = 48.dp, max = 180.dp)
                 .padding(horizontal = SpaceMd)
                 .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
@@ -663,7 +681,7 @@ private fun KeyguardBatteryChip(
         ) {
             
             if (info.isCharging) {
-                AnimatedChargingBoltIcon(contentColor, BatteryIconSize)
+                AnimatedChargingBoltIcon(BatteryChargingColor, BatteryIconSize)
             } else {
                 AnimatedBatteryFillIcon(info.level, contentColor, BatteryIconSize)
             }
