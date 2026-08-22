@@ -23,7 +23,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -40,12 +39,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.basicMarquee
+import com.android.axion.blur.AxBlurSurface
+import com.android.axion.blur.AxBlurSurfaceDefaults
 import androidx.compose.ui.unit.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.systemui.axion.volume.domain.model.AxionStreamInfo
@@ -174,12 +174,13 @@ private fun CollapsedVolumeDialog(viewModel: AxionVolumeDialogViewModel) {
             cornerRadius = cornerRadius
         )
 
-        Box(
+        AxBlurSurface(
             modifier = Modifier
-                .width(SliderWidthCollapsed) // CHANGED: Added explicit width
-                .clip(RoundedCornerShape(cornerRadius))
-                .background(MaterialTheme.colorScheme.surfaceBright),
-            contentAlignment = Alignment.Center // CHANGED: Added contentAlignment
+                .width(SliderWidthCollapsed),
+            shape = RoundedCornerShape(cornerRadius),
+            cornerRadius = cornerRadius,
+            surfaceColor = AxBlurSurfaceDefaults.surfaceColor(),
+            contentAlignment = Alignment.Center,
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -292,11 +293,12 @@ private fun ExpandedPanelContent(
     cornerRadius: Dp,
     isLandscape: Boolean = false
 ) {
-    Box(
+    AxBlurSurface(
         modifier = Modifier
-            .width(panelWidth)
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(MaterialTheme.colorScheme.surfaceBright)
+            .width(panelWidth),
+        shape = RoundedCornerShape(cornerRadius),
+        cornerRadius = cornerRadius,
+        surfaceColor = AxBlurSurfaceDefaults.surfaceColor(),
     ) {
         Column(
             modifier = Modifier.padding(vertical = 12.dp),
