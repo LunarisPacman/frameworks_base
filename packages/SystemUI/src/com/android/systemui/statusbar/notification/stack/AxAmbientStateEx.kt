@@ -29,6 +29,11 @@ class AxAmbientStateEx @Inject constructor() {
 
     var isProgressBarIndeterminateAnimationRunning: Boolean = true
 
+    /** Whether the Stack style is active for lock screen notifications (true = Stack, false = List). */
+    @get:JvmName("isLockscreenNotifStyleStack")
+    @set:JvmName("setLockscreenNotifStyleStack")
+    var lockscreenNotifStyleStack: Boolean = false
+
     var playingCannedUnlockAnimationCancelTouch: Boolean = false
 
     var qsCustomizing: Boolean = false

@@ -4955,6 +4955,11 @@ public class NotificationStackScrollLayout
         }
     }
 
+    /** Propagates the lock screen notification style to the scroll algorithm. */
+    void setLockscreenNotifStyleStack(boolean stackStyle) {
+        mStackScrollAlgorithm.setLockscreenNotifStyleStack(stackStyle);
+    }
+
     private void updateChronometers() {
         int childCount = getChildCount();
         for (int i = 0; i < childCount; i++) {

@@ -32,8 +32,13 @@ import static com.android.systemui.statusbar.notification.stack.NotificationStac
 import static com.android.systemui.statusbar.notification.stack.StackStateAnimator.ANIMATION_DURATION_STANDARD;
 
 import android.animation.ObjectAnimator;
+import android.content.ContentResolver;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Point;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.graphics.RectF;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
@@ -339,6 +344,28 @@ public class NotificationStackScrollLayoutController implements Dumpable {
 
     private void updateResources() {
         mNotificationStackSizeCalculator.updateResources();
+    }
+
+    private void registerLockscreenNotifStyleObserver() {
+        final ContentResolver resolver = mView.getContext().getContentResolver();
+        final Uri uri = Settings.System.getUriFor(
+                Settings.System.LOCKSCREEN_NOTIFICATION_STYLE);
+        final Handler handler = new Handler(Looper.getMainLooper());
+        // Apply the initial value immediately.
+        applyLockscreenNotifStyle(resolver);
+        resolver.registerContentObserver(uri, false, new ContentObserver(handler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                applyLockscreenNotifStyle(resolver);
+                mView.requestChildrenUpdate();
+            }
+        });
+    }
+
+    private void applyLockscreenNotifStyle(ContentResolver resolver) {
+        final int style = Settings.System.getInt(
+                resolver, Settings.System.LOCKSCREEN_NOTIFICATION_STYLE, 0);
+        mView.setLockscreenNotifStyleStack(style == 1);
     }
 
     private final StatusBarStateController.StateListener mStateListener =
@@ -943,6 +970,7 @@ public class NotificationStackScrollLayoutController implements Dumpable {
     private void setUpView() {
         mView.setStackStateLogger(mStackStateLogger);
         mView.setController(this);
+        registerLockscreenNotifStyleObserver();
         mView.setLogger(mLogger);
         mTouchHandler = new TouchHandler();
         mView.setTouchHandler(mTouchHandler);

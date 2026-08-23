@@ -7811,6 +7811,14 @@ public final class Settings {
         public static final String NOTIFICATION_SOUND_VIB_SCREEN_ON = "notification_sound_vib_screen_on";
 
         /**
+         * Lock screen notification display style.
+         * 0 = List (default)
+         * 1 = Stack (notifications peek behind each other)
+         * @hide
+         */
+        public static final String LOCKSCREEN_NOTIFICATION_STYLE = "lockscreen_notification_style";
+
+        /**
          * Tint statusbar icons with system accent color
          * @hide
          */

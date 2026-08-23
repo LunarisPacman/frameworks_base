@@ -57,11 +57,17 @@ public class StackScrollAlgorithm {
 
     public static final float START_FRACTION = 0.5f;
 
+    /** Pixels each subsequent notification peeks from behind the card above it in Stack style. */
+    private static final float STACK_PEEK_AMOUNT_DP = 14f;
+
     private static final String TAG = "StackScrollAlgorithm";
     private static final SourceType STACK_SCROLL_ALGO = SourceType.from("StackScrollAlgorithm");
     private final ViewGroup mHostView;
     @Nullable
     private final HeadsUpAnimator mHeadsUpAnimator;
+
+    /** True when the Stack lock screen notification style is active. */
+    private boolean mLockscreenNotifStyleStack = false;
 
     private float mPaddingBetweenElements;
     private float mBundleGapHeight;
@@ -142,6 +148,7 @@ public class StackScrollAlgorithm {
         resetChildViewStates();
         initAlgorithmState(algorithmState, ambientState);
         updatePositionsForState(algorithmState, ambientState);
+        applyLockscreenStackStyle(algorithmState, ambientState);
         updateZValuesForState(algorithmState, ambientState);
         updateHeadsUpStates(algorithmState, ambientState);
         updatePulsingStates(algorithmState, ambientState);
@@ -354,6 +361,57 @@ public class StackScrollAlgorithm {
         }
 
         shelf.updateState(algorithmState, ambientState);
+    }
+
+    /**
+     * Sets whether the Stack lock screen notification style is enabled.
+     * Called from {@link NotificationStackScrollLayoutController} when the setting changes.
+     */
+    public void setLockscreenNotifStyleStack(boolean stackStyle) {
+        mLockscreenNotifStyleStack = stackStyle;
+    }
+
+    /**
+     * When the Stack lock screen notification style is active, re-position children so that:
+     * - the first (top) notification is fully visible at its normal Y position.
+     * - every subsequent notification is shifted down so only STACK_PEEK_AMOUNT dp of its
+     *   top edge is visible peeking behind the card above it.
+     * This creates the stacked-cards look shown in the screenshot.
+     */
+    private void applyLockscreenStackStyle(
+            StackScrollAlgorithmState algorithmState,
+            AmbientState ambientState) {
+        if (!mLockscreenNotifStyleStack) return;
+        if (!ambientState.isOnKeyguard()) return;
+        if (ambientState.isShadeExpanded()) return;
+
+        final float density = mHostView.getResources().getDisplayMetrics().density;
+        final float peekAmount = STACK_PEEK_AMOUNT_DP * density;
+
+        int childCount = algorithmState.visibleChildren.size();
+        float firstNotifBottom = -1f;
+
+        for (int i = 0; i < childCount; i++) {
+            ExpandableView child = algorithmState.visibleChildren.get(i);
+            // Only reposition actual notification rows.
+            if (!(child instanceof ExpandableNotificationRow)) continue;
+            if (child.isPinned() || child.isHeadsUpAnimatingAway()) continue;
+
+            ExpandableViewState state = child.getViewState();
+            if (state.hidden) continue;
+
+            if (firstNotifBottom < 0f) {
+                // First notification: stays at its normal position; record its bottom edge.
+                firstNotifBottom = state.getYTranslation() + state.height;
+            } else {
+                // Subsequent notifications: peek by peekAmount behind the card above.
+                float peekY = firstNotifBottom - peekAmount * (childCount - i);
+                // Never let a card go above the first card's bottom.
+                peekY = Math.max(peekY, firstNotifBottom - peekAmount);
+                state.setYTranslation(peekY);
+                state.clipTopAmount = 0;
+            }
+        }
     }
 
     private void updateShelfIconContainerState(AmbientState ambientState) {
