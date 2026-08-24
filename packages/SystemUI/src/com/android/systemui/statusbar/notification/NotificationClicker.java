@@ -106,7 +106,7 @@ public final class NotificationClicker implements View.OnClickListener {
 
         // Lockscreen Stack Style expansion handling: expand stack on lockscreen when clicked
         AmbientState ambientState = Dependency.get(AmbientState.class);
-        if (row.isOnKeyguard() && ambientState != null && ambientState.isLockscreenNotifStyleStack()) {
+        if (row.isOnKeyguard() && ambientState != null && ambientState.isLockscreenNotifStyleStack() && !isOngoingRow(row)) {
             NotificationStackScrollLayout nssl = getStackScrollLayout(v);
             if (!ambientState.isLockscreenNotifStackExpanded()) {
                 // Stack is currently collapsed: expand the stack on lockscreen with fluid animation!
@@ -160,6 +160,17 @@ public final class NotificationClicker implements View.OnClickListener {
             }
         }
         return null;
+    }
+
+    private boolean isOngoingRow(ExpandableNotificationRow row) {
+        if (row == null) return false;
+        NotificationEntry entry = NotificationBundleUi.isEnabled()
+                ? row.getEntryAdapter()
+                : row.getEntryLegacy();
+        if (entry != null && entry.getSbn() != null && entry.getSbn().isOngoing()) {
+            return true;
+        }
+        return false;
     }
 
     private boolean isMenuVisible(ExpandableNotificationRow row) {

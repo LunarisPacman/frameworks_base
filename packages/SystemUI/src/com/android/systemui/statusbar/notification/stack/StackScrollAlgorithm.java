@@ -42,6 +42,7 @@ import com.android.systemui.statusbar.notification.headsup.HeadsUpAnimator;
 import com.android.systemui.statusbar.notification.row.ActivatableNotificationView;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.row.ExpandableView;
+import com.android.systemui.statusbar.notification.collection.NotificationEntry;
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi;
 import com.android.systemui.statusbar.notification.shared.NotificationHeadsUpCycling;
 
@@ -398,12 +399,14 @@ public class StackScrollAlgorithm {
 
         int childCount = algorithmState.visibleChildren.size();
 
-        // Collect only the notification rows we will reposition.
+        // Collect only non-ongoing notification rows we will stack.
         List<Integer> notifIndices = new ArrayList<>();
         for (int i = 0; i < childCount; i++) {
             ExpandableView child = algorithmState.visibleChildren.get(i);
             if (!(child instanceof ExpandableNotificationRow)) continue;
             if (child.isPinned() || child.isHeadsUpAnimatingAway()) continue;
+            ExpandableNotificationRow row = (ExpandableNotificationRow) child;
+            if (isOngoingRow(row)) continue;
             ExpandableViewState state = child.getViewState();
             if (state.hidden) continue;
             notifIndices.add(i);
@@ -443,6 +446,17 @@ public class StackScrollAlgorithm {
                 state.setScaleX(Math.max(0.85f, 1.0f - s * 0.04f));
             }
         }
+    }
+
+    private boolean isOngoingRow(ExpandableNotificationRow row) {
+        if (row == null) return false;
+        NotificationEntry entry = NotificationBundleUi.isEnabled()
+                ? row.getEntryAdapter()
+                : row.getEntryLegacy();
+        if (entry != null && entry.getSbn() != null && entry.getSbn().isOngoing()) {
+            return true;
+        }
+        return false;
     }
 
     private void updateShelfIconContainerState(AmbientState ambientState) {
