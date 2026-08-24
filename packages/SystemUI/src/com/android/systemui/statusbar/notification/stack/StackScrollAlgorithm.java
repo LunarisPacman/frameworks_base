@@ -437,7 +437,7 @@ public class StackScrollAlgorithm {
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
                 // Make cards 2+ slightly less alpha to emphasise depth.
-                state.alpha = Math.max(0.6f, 1f - s * 0.15f);
+                state.setAlpha(Math.max(0.6f, 1f - s * 0.15f));
             }
         }
     }
