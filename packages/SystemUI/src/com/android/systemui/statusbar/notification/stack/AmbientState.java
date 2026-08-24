@@ -383,6 +383,28 @@ public class AmbientState implements Dumpable {
         return NOTIFICATIONS_HAVE_SHADOWS ? 2 * getBaseHeight(zDistance) : 4 * zDistance;
     }
 
+    private boolean mLockscreenNotifStyleStack = false;
+    private boolean mLockscreenNotifStackExpanded = false;
+
+    public boolean isLockscreenNotifStyleStack() {
+        return mLockscreenNotifStyleStack;
+    }
+
+    public void setLockscreenNotifStyleStack(boolean stackStyle) {
+        mLockscreenNotifStyleStack = stackStyle;
+        if (!stackStyle) {
+            mLockscreenNotifStackExpanded = false;
+        }
+    }
+
+    public boolean isLockscreenNotifStackExpanded() {
+        return mLockscreenNotifStackExpanded;
+    }
+
+    public void setLockscreenNotifStackExpanded(boolean expanded) {
+        mLockscreenNotifStackExpanded = expanded;
+    }
+
     /**
      * @return the basic Z height on which notifications remain.
      */

@@ -29,6 +29,12 @@ import com.android.systemui.statusbar.notification.collection.NotificationEntry;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi;
 
+import com.android.systemui.Dependency;
+import com.android.systemui.res.R;
+import com.android.systemui.statusbar.notification.row.ExpandableView;
+import com.android.systemui.statusbar.notification.stack.AmbientState;
+import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout;
+
 import javax.inject.Inject;
 
 /**
@@ -98,6 +104,31 @@ public final class NotificationClicker implements View.OnClickListener {
             return;
         }
 
+        // Lockscreen Stack Style expansion handling: expand stack on lockscreen when clicked
+        AmbientState ambientState = Dependency.get(AmbientState.class);
+        if (row.isOnKeyguard() && ambientState != null && ambientState.isLockscreenNotifStyleStack()) {
+            NotificationStackScrollLayout nssl = getStackScrollLayout(v);
+            if (!ambientState.isLockscreenNotifStackExpanded()) {
+                // Stack is currently collapsed: expand the stack on lockscreen with fluid animation!
+                if (nssl != null) {
+                    nssl.setLockscreenNotifStackExpanded(true);
+                } else {
+                    ambientState.setLockscreenNotifStackExpanded(true);
+                }
+                return;
+            } else {
+                // Stack is ALREADY expanded on lockscreen:
+                // Tapping top card re-collapses back to stacked deck
+                if (nssl != null) {
+                    ExpandableView firstChild = nssl.getFirstChildNotGone();
+                    if (firstChild == row || (row.isChildInGroup() && firstChild == row.getNotificationParent())) {
+                        nssl.setLockscreenNotifStackExpanded(false);
+                        return;
+                    }
+                }
+            }
+        }
+
         // Mark notification for one frame.
         row.setJustClicked(true);
         DejankUtils.postAfterTraversal(() -> row.setJustClicked(false));
@@ -107,6 +138,28 @@ public final class NotificationClicker implements View.OnClickListener {
         } else {
             mNotificationActivityStarter.onNotificationClicked(row.getEntryLegacy(), row);
         }
+    }
+
+    private NotificationStackScrollLayout getStackScrollLayout(View v) {
+        View current = v;
+        while (current != null) {
+            if (current instanceof NotificationStackScrollLayout) {
+                return (NotificationStackScrollLayout) current;
+            }
+            if (current.getParent() instanceof View) {
+                current = (View) current.getParent();
+            } else {
+                break;
+            }
+        }
+        View root = v.getRootView();
+        if (root != null) {
+            View stack = root.findViewById(R.id.notification_stack_scroller);
+            if (stack instanceof NotificationStackScrollLayout) {
+                return (NotificationStackScrollLayout) stack;
+            }
+        }
+        return null;
     }
 
     private boolean isMenuVisible(ExpandableNotificationRow row) {

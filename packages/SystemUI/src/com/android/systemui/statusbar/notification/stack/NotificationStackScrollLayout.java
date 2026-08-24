@@ -4955,9 +4955,33 @@ public class NotificationStackScrollLayout
         }
     }
 
-    /** Propagates the lock screen notification style to the scroll algorithm. */
+    private boolean mLockscreenNotifStackExpanded = false;
+
+    /** Propagates the lock screen notification style to the scroll algorithm and ambient state. */
     void setLockscreenNotifStyleStack(boolean stackStyle) {
         mStackScrollAlgorithm.setLockscreenNotifStyleStack(stackStyle);
+        mAmbientState.setLockscreenNotifStyleStack(stackStyle);
+        if (!stackStyle) {
+            setLockscreenNotifStackExpanded(false);
+        }
+    }
+
+    public boolean isLockscreenNotifStackExpanded() {
+        return mLockscreenNotifStackExpanded;
+    }
+
+    public void setLockscreenNotifStackExpanded(boolean expanded) {
+        if (mLockscreenNotifStackExpanded != expanded) {
+            mLockscreenNotifStackExpanded = expanded;
+            mAmbientState.setLockscreenNotifStackExpanded(expanded);
+            mAnimationEvents.add(new AnimationEvent(null, AnimationEvent.ANIMATION_TYPE_EVERYTHING));
+            requestChildrenUpdate();
+        }
+    }
+
+    public boolean toggleLockscreenNotifStackExpanded() {
+        setLockscreenNotifStackExpanded(!mLockscreenNotifStackExpanded);
+        return mLockscreenNotifStackExpanded;
     }
 
     private void updateChronometers() {
