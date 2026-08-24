@@ -348,8 +348,8 @@ public class NotificationStackScrollLayoutController implements Dumpable {
 
     private void registerLockscreenNotifStyleObserver() {
         final ContentResolver resolver = mView.getContext().getContentResolver();
-        final Uri uri = Settings.System.getUriFor(
-                Settings.System.LOCKSCREEN_NOTIFICATION_STYLE);
+        final Uri uri = Settings.Secure.getUriFor(
+                Settings.Secure.LOCK_SCREEN_NOTIFICATION_MINIMALISM);
         final Handler handler = new Handler(Looper.getMainLooper());
         // Apply the initial value immediately.
         applyLockscreenNotifStyle(resolver);
@@ -363,9 +363,9 @@ public class NotificationStackScrollLayoutController implements Dumpable {
     }
 
     private void applyLockscreenNotifStyle(ContentResolver resolver) {
-        final int style = Settings.System.getInt(
-                resolver, Settings.System.LOCKSCREEN_NOTIFICATION_STYLE, 0);
-        mView.setLockscreenNotifStyleStack(style == 1);
+        final int minimalismMode = Settings.Secure.getInt(
+                resolver, Settings.Secure.LOCK_SCREEN_NOTIFICATION_MINIMALISM, 0);
+        mView.setLockscreenNotifStyleStack(minimalismMode == 2);
     }
 
     private final StatusBarStateController.StateListener mStateListener =

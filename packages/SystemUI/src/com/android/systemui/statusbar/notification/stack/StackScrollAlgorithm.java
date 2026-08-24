@@ -389,7 +389,8 @@ public class StackScrollAlgorithm {
             AmbientState ambientState) {
         if (!mLockscreenNotifStyleStack) return;
         if (!ambientState.isOnKeyguard()) return;
-        if (ambientState.isShadeExpanded()) return;
+        if (ambientState.getFractionToShade() > 0.5f) return;
+        if (ambientState.getQsExpansionFraction() > 0f) return;
 
         final float density = mHostView.getResources().getDisplayMetrics().density;
         final float peekPx = STACK_PEEK_AMOUNT_DP * density;
@@ -427,6 +428,7 @@ public class StackScrollAlgorithm {
                 // No clipping needed for the top card.
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
+                state.setScaleX(1.0f);
             } else {
                 // Each subsequent card peeks peekPx below the previous card's top.
                 currentTop = currentTop + peekPx;
@@ -436,8 +438,9 @@ public class StackScrollAlgorithm {
                 // Don't clip the peeking area – it's intentionally visible.
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
-                // Make cards 2+ slightly less alpha to emphasise depth.
-                state.setAlpha(Math.max(0.6f, 1f - s * 0.15f));
+                // Make cards 2+ slightly less alpha and narrower to emphasize depth.
+                state.setAlpha(Math.max(0.6f, 1f - s * 0.12f));
+                state.setScaleX(Math.max(0.85f, 1.0f - s * 0.04f));
             }
         }
     }
