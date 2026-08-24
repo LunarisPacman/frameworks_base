@@ -450,10 +450,10 @@ public class StackScrollAlgorithm {
 
     private boolean isOngoingRow(ExpandableNotificationRow row) {
         if (row == null) return false;
-        NotificationEntry entry = NotificationBundleUi.isEnabled()
-                ? row.getEntryAdapter()
-                : row.getEntryLegacy();
-        if (entry != null && entry.getSbn() != null && entry.getSbn().isOngoing()) {
+        StatusBarNotification sbn = row.getEntryLegacy() != null
+                ? row.getEntryLegacy().getSbn()
+                : (row.getEntryAdapter() != null ? row.getEntryAdapter().getSbn() : null);
+        if (sbn != null && sbn.isOngoing()) {
             return true;
         }
         return false;
