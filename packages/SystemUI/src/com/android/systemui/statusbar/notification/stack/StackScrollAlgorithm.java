@@ -418,13 +418,17 @@ public class StackScrollAlgorithm {
 
         // The top card stays at its original Y position.
         ExpandableView topChild = algorithmState.visibleChildren.get(notifIndices.get(0));
+        if (topChild == null) return;
         ExpandableViewState topState = topChild.getViewState();
+        if (topState == null) return;
         float currentTop = topState.getYTranslation();
 
         for (int s = 0; s < stackSize; s++) {
             int idx = notifIndices.get(s);
             ExpandableView child = algorithmState.visibleChildren.get(idx);
+            if (child == null) continue;
             ExpandableViewState state = child.getViewState();
+            if (state == null) continue;
 
             if (s == 0) {
                 // Top card: leave Y as-is, give highest Z so it renders over the others.
@@ -451,13 +455,10 @@ public class StackScrollAlgorithm {
 
     private boolean isOngoingRow(ExpandableNotificationRow row) {
         if (row == null) return false;
-        StatusBarNotification sbn = row.getEntryLegacy() != null
-                ? row.getEntryLegacy().getSbn()
-                : (row.getEntryAdapter() != null ? row.getEntryAdapter().getSbn() : null);
-        if (sbn != null && sbn.isOngoing()) {
-            return true;
-        }
-        return false;
+        StatusBarNotification sbn = NotificationBundleUi.isEnabled()
+                ? (row.getEntryAdapter() != null ? row.getEntryAdapter().getSbn() : null)
+                : (row.getEntry() != null ? row.getEntry().getSbn() : null);
+        return sbn != null && sbn.isOngoing();
     }
 
     private void updateShelfIconContainerState(AmbientState ambientState) {

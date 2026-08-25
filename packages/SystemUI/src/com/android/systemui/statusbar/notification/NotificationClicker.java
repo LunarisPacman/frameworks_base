@@ -164,13 +164,10 @@ public final class NotificationClicker implements View.OnClickListener {
 
     private boolean isOngoingRow(ExpandableNotificationRow row) {
         if (row == null) return false;
-        StatusBarNotification sbn = row.getEntryLegacy() != null
-                ? row.getEntryLegacy().getSbn()
-                : (row.getEntryAdapter() != null ? row.getEntryAdapter().getSbn() : null);
-        if (sbn != null && sbn.isOngoing()) {
-            return true;
-        }
-        return false;
+        StatusBarNotification sbn = NotificationBundleUi.isEnabled()
+                ? (row.getEntryAdapter() != null ? row.getEntryAdapter().getSbn() : null)
+                : (row.getEntry() != null ? row.getEntry().getSbn() : null);
+        return sbn != null && sbn.isOngoing();
     }
 
     private boolean isMenuVisible(ExpandableNotificationRow row) {
