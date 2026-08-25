@@ -374,31 +374,43 @@ public class StackScrollAlgorithm {
         mLockscreenNotifStyleStack = stackStyle;
     }
 
+    private static final SourceType LOCKSCREEN_STACK = SourceType.from("LockscreenStack");
+
     /**
-     * When the Stack lock screen notification style is active, positions notification cards so they
-     * appear stacked like a physical deck of cards:
+     * Rearranges notifications on the lockscreen into a compact stacked card deck:
      * - Card 0 (top) is fully visible at its normal position.
-     * - Card 1 peeks {@link #STACK_PEEK_AMOUNT_DP}dp below card 0's top edge, so most of card 1
-     *   is hidden behind card 0.
-     * - Card 2 peeks the same amount below card 1's new top, and so on.
+     * - Card 1 peeks {@link #STACK_PEEK_AMOUNT_DP}dp below card 0's top edge.
+     * - Card 2 peeks the same amount below card 1's top, and so on.
      *
-     * Z-translation is assigned in reverse order so card 0 renders on top of card 1, which renders
-     * on top of card 2, etc.  ClipTopAmount is zeroed on stacked cards so the peeking portion
-     * is never clipped away by the normal clipping pass.
+     * Forces full top and bottom roundness on each stacked card so corners are uniform and rounded.
+     * Reverts to standard list layout when shade/panel is pulled down or stack is tap-expanded.
      */
     private void applyLockscreenStackStyle(
             StackScrollAlgorithmState algorithmState,
             AmbientState ambientState) {
-        if (!mLockscreenNotifStyleStack) return;
-        if (!ambientState.isOnKeyguard()) return;
-        if (ambientState.getFractionToShade() > 0.5f) return;
-        if (ambientState.getQsExpansionFraction() > 0f) return;
+        boolean shouldApply = mLockscreenNotifStyleStack
+                && ambientState.isOnKeyguard()
+                && !ambientState.isLockscreenNotifStackExpanded()
+                && !ambientState.isShadeExpanded()
+                && ambientState.getExpansionFraction() == 0f
+                && ambientState.getFractionToShade() == 0f
+                && ambientState.getQsExpansionFraction() == 0f;
+
+        int childCount = algorithmState.visibleChildren.size();
+
+        if (!shouldApply) {
+            for (int i = 0; i < childCount; i++) {
+                ExpandableView child = algorithmState.visibleChildren.get(i);
+                if (child instanceof ExpandableNotificationRow) {
+                    ((ExpandableNotificationRow) child).requestRoundnessReset(LOCKSCREEN_STACK);
+                }
+            }
+            return;
+        }
 
         final float density = mHostView.getResources().getDisplayMetrics().density;
         final float peekPx = STACK_PEEK_AMOUNT_DP * density;
         final float baseZ = ambientState.getBaseZHeight();
-
-        int childCount = algorithmState.visibleChildren.size();
 
         // Collect only non-ongoing notification rows we will stack.
         List<Integer> notifIndices = new ArrayList<>();
@@ -407,7 +419,10 @@ public class StackScrollAlgorithm {
             if (!(child instanceof ExpandableNotificationRow)) continue;
             if (child.isPinned() || child.isHeadsUpAnimatingAway()) continue;
             ExpandableNotificationRow row = (ExpandableNotificationRow) child;
-            if (isOngoingRow(row)) continue;
+            if (isOngoingRow(row)) {
+                row.requestRoundnessReset(LOCKSCREEN_STACK);
+                continue;
+            }
             ExpandableViewState state = child.getViewState();
             if (state.hidden) continue;
             notifIndices.add(i);
@@ -429,6 +444,12 @@ public class StackScrollAlgorithm {
             if (child == null) continue;
             ExpandableViewState state = child.getViewState();
             if (state == null) continue;
+
+            if (child instanceof ExpandableNotificationRow) {
+                ExpandableNotificationRow row = (ExpandableNotificationRow) child;
+                // Enforce uniform 100% rounded corners on top and bottom of every stacked card
+                row.requestRoundness(1.0f, 1.0f, LOCKSCREEN_STACK);
+            }
 
             if (s == 0) {
                 // Top card: leave Y as-is, give highest Z so it renders over the others.
