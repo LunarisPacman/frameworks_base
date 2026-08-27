@@ -47,6 +47,7 @@ public final class NotificationClicker implements View.OnClickListener {
     private final NotificationClickerLogger mLogger;
     private final PowerInteractor mPowerInteractor;
     private final NotificationActivityStarter mNotificationActivityStarter;
+    private final AmbientState mAmbientState;
 
     private ExpandableNotificationRow.OnDragSuccessListener mOnDragSuccessListener
             = new ExpandableNotificationRow.OnDragSuccessListener() {
@@ -66,10 +67,12 @@ public final class NotificationClicker implements View.OnClickListener {
     private NotificationClicker(
             NotificationClickerLogger logger,
             PowerInteractor powerInteractor,
-            NotificationActivityStarter notificationActivityStarter) {
+            NotificationActivityStarter notificationActivityStarter,
+            AmbientState ambientState) {
         mLogger = logger;
         mPowerInteractor = powerInteractor;
         mNotificationActivityStarter = notificationActivityStarter;
+        mAmbientState = ambientState;
     }
 
     @Override
@@ -79,21 +82,8 @@ public final class NotificationClicker implements View.OnClickListener {
             return;
         }
 
-        mPowerInteractor.wakeUpIfDozing("NOTIFICATION_CLICK", PowerManager.WAKE_REASON_GESTURE);
-
         final ExpandableNotificationRow row = (ExpandableNotificationRow) v;
-        mLogger.logOnClick(row.getLoggingKey());
-
-        // Check if the notification is displaying the menu, if so slide notification back
-        if (isMenuVisible(row)) {
-            mLogger.logMenuVisible(row.getLoggingKey());
-            row.animateResetTranslation();
-            return;
-        } else if (row.isChildInGroup() && isMenuVisible(row.getNotificationParent())) {
-            mLogger.logParentMenuVisible(row.getLoggingKey());
-            row.getNotificationParent().animateResetTranslation();
-            return;
-        } else if (row.isSummaryWithChildren() && row.areChildrenExpanded()) {
+        if (!row.isSummaryWithChildren() && row.areChildrenExpanded()) {
             // We never want to open the app directly if the user clicks in between
             // the notifications.
             mLogger.logChildrenExpanded(row.getLoggingKey());
@@ -105,15 +95,15 @@ public final class NotificationClicker implements View.OnClickListener {
         }
 
         // Lockscreen Stack Style expansion handling: expand stack on lockscreen when clicked
-        AmbientState ambientState = Dependency.get(AmbientState.class);
-        if (row.isOnKeyguard() && ambientState != null && ambientState.isLockscreenNotifStyleStack() && !isOngoingRow(row)) {
+        if (mAmbientState != null && (mAmbientState.isOnKeyguard() || row.isOnKeyguard())
+                && mAmbientState.isLockscreenNotifStyleStack() && !isOngoingRow(row)) {
             NotificationStackScrollLayout nssl = getStackScrollLayout(v);
-            if (!ambientState.isLockscreenNotifStackExpanded()) {
+            if (!mAmbientState.isLockscreenNotifStackExpanded()) {
                 // Stack is currently collapsed: expand the stack on lockscreen with fluid animation!
                 if (nssl != null) {
                     nssl.setLockscreenNotifStackExpanded(true);
                 } else {
-                    ambientState.setLockscreenNotifStackExpanded(true);
+                    mAmbientState.setLockscreenNotifStackExpanded(true);
                 }
                 return;
             } else {
@@ -205,11 +195,13 @@ public final class NotificationClicker implements View.OnClickListener {
     public static class Builder {
         private final NotificationClickerLogger mLogger;
         private final PowerInteractor mPowerInteractor;
+        private final AmbientState mAmbientState;
 
         @Inject
-        public Builder(NotificationClickerLogger logger, PowerInteractor powerInteractor) {
+        public Builder(NotificationClickerLogger logger, PowerInteractor powerInteractor, AmbientState ambientState) {
             mLogger = logger;
             mPowerInteractor = powerInteractor;
+            mAmbientState = ambientState;
         }
 
         /** Builds an instance. */
@@ -217,7 +209,8 @@ public final class NotificationClicker implements View.OnClickListener {
             return new NotificationClicker(
                     mLogger,
                     mPowerInteractor,
-                    notificationActivityStarter);
+                    notificationActivityStarter,
+                    mAmbientState);
         }
     }
 }

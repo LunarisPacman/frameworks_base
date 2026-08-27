@@ -21,6 +21,7 @@
     <drawable name="system_bar_background">@color/system_bar_background_opaque</drawable>
     <color name="system_bar_background_opaque">#ff000000</color>
     <color name="system_bar_background_transparent">#00000000</color>
+    <color name="notification_focus_overlay_color">@android:color/transparent</color>
     <color name="qs_tile_divider">#29ffffff</color><!-- 16% white -->
     <color name="qs_detail_button_white">#B3FFFFFF</color><!-- 70% white -->
     <color name="status_bar_clock_color">#FFFFFFFF</color>
