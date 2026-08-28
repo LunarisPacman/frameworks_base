@@ -4974,7 +4974,7 @@ public class NotificationStackScrollLayout
         if (mLockscreenNotifStackExpanded != expanded) {
             mLockscreenNotifStackExpanded = expanded;
             mAmbientState.setLockscreenNotifStackExpanded(expanded);
-            mAnimationEvents.add(new AnimationEvent(null, AnimationEvent.ANIMATION_TYPE_EVERYTHING));
+            requestAnimateEverything();
             requestChildrenUpdate();
         }
     }

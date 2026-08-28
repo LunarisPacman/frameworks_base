@@ -392,7 +392,8 @@ public class StackScrollAlgorithm {
         if (ambientState.getQsExpansionFraction() > 0f) return;
 
         final float density = mHostView.getResources().getDisplayMetrics().density;
-        final float peekPx = STACK_PEEK_AMOUNT_DP * density;
+        final float peekPxFirst = 14f * density;
+        final float peekPxSubsequent = 10f * density;
         final float baseZ = ambientState.getBaseZHeight();
 
         int childCount = algorithmState.visibleChildren.size();
@@ -434,18 +435,19 @@ public class StackScrollAlgorithm {
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
                 state.setScaleX(1.0f);
+                state.setAlpha(1.0f);
             } else {
-                // Each subsequent card peeks peekPx below the previous card's top.
-                currentTop = currentTop + peekPx;
+                // Card 1 peeks 14dp below Card 0. Subsequent cards peek 10dp below previous card.
+                currentTop += (s == 1) ? peekPxFirst : peekPxSubsequent;
                 state.setYTranslation(currentTop);
                 // Z decreases so each card is beneath the one above it.
                 state.setZTranslation(baseZ + (stackSize - s) * mPinnedZTranslationExtra);
                 // Don't clip the peeking area – it's intentionally visible.
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
-                // Make cards 2+ slightly less alpha and narrower to emphasize depth.
-                state.setAlpha(Math.max(0.6f, 1f - s * 0.12f));
-                state.setScaleX(Math.max(0.85f, 1.0f - s * 0.04f));
+                // Refined depth scale and progressive opacity hierarchy
+                state.setAlpha(Math.max(0.45f, 0.95f - (s - 1) * 0.15f));
+                state.setScaleX(Math.max(0.85f, 0.95f - (s - 1) * 0.05f));
             }
         }
     }

@@ -95,8 +95,15 @@ public final class NotificationClicker implements View.OnClickListener {
         }
 
         // Lockscreen Stack Style expansion handling: expand stack on lockscreen when clicked
-        if (mAmbientState != null && (mAmbientState.isOnKeyguard() || row.isOnKeyguard())
-                && mAmbientState.isLockscreenNotifStyleStack() && !isOngoingRow(row)) {
+        boolean isLockscreenStackActive = mAmbientState != null
+                && mAmbientState.isOnKeyguard()
+                && !mAmbientState.isShadeExpanded()
+                && mAmbientState.getFractionToShade() == 0f
+                && mAmbientState.getQsExpansionFraction() == 0f
+                && mAmbientState.isLockscreenNotifStyleStack()
+                && !isOngoingRow(row);
+
+        if (isLockscreenStackActive) {
             NotificationStackScrollLayout nssl = getStackScrollLayout(v);
             if (!mAmbientState.isLockscreenNotifStackExpanded()) {
                 // Stack is currently collapsed: expand the stack on lockscreen with fluid animation!
