@@ -375,25 +375,18 @@ public class StackScrollAlgorithm {
     }
 
     /**
-     * Rearranges notifications on the lockscreen into a compact stacked card deck:
-     * - Card 0 (top) is fully visible at its normal position.
-     * - Card 1 peeks {@link #STACK_PEEK_AMOUNT_DP}dp below card 0's top edge.
-     * - Card 2 peeks the same amount below card 1's top, and so on.
-     *
-     * Reverts to standard list layout when shade/panel is pulled down or stack is tap-expanded.
+     * Rearranges notifications on the lockscreen into a compact stacked card deck when collapsed,
+     * or into a fluid HyperOS 4 style expanded stacked list when tap-expanded on the lockscreen.
      */
     private void applyLockscreenStackStyle(
             StackScrollAlgorithmState algorithmState,
             AmbientState ambientState) {
         if (!mLockscreenNotifStyleStack) return;
         if (!ambientState.isOnKeyguard()) return;
-        if (ambientState.isLockscreenNotifStackExpanded()) return;
         if (ambientState.getFractionToShade() > 0f) return;
         if (ambientState.getQsExpansionFraction() > 0f) return;
 
         final float density = mHostView.getResources().getDisplayMetrics().density;
-        final float peekPxFirst = 14f * density;
-        final float peekPxSubsequent = 10f * density;
         final float baseZ = ambientState.getBaseZHeight();
 
         int childCount = algorithmState.visibleChildren.size();
@@ -419,35 +412,61 @@ public class StackScrollAlgorithm {
         if (topChild == null) return;
         ExpandableViewState topState = topChild.getViewState();
         if (topState == null) return;
-        float currentTop = topState.getYTranslation();
+        float startTop = topState.getYTranslation();
 
-        for (int s = 0; s < stackSize; s++) {
-            int idx = notifIndices.get(s);
-            ExpandableView child = algorithmState.visibleChildren.get(idx);
-            if (child == null) continue;
-            ExpandableViewState state = child.getViewState();
-            if (state == null) continue;
+        boolean isExpandedOnLockscreen = ambientState.isLockscreenNotifStackExpanded();
 
-            if (s == 0) {
-                // Top card: leave Y as-is, give highest Z so it renders over the others.
-                state.setZTranslation(baseZ + (stackSize) * mPinnedZTranslationExtra);
-                // No clipping needed for the top card.
+        if (!isExpandedOnLockscreen) {
+            // COLLAPSED DECK MODE (Screenshot 2):
+            final float peekPxFirst = 14f * density;
+            final float peekPxSubsequent = 10f * density;
+            float currentTop = startTop;
+
+            for (int s = 0; s < stackSize; s++) {
+                int idx = notifIndices.get(s);
+                ExpandableView child = algorithmState.visibleChildren.get(idx);
+                if (child == null) continue;
+                ExpandableViewState state = child.getViewState();
+                if (state == null) continue;
+
+                if (s == 0) {
+                    state.setZTranslation(baseZ + (stackSize) * mPinnedZTranslationExtra);
+                    state.clipTopAmount = 0;
+                    state.clipBottomAmount = 0;
+                    state.setScaleX(1.0f);
+                    state.setAlpha(1.0f);
+                } else {
+                    currentTop += (s == 1) ? peekPxFirst : peekPxSubsequent;
+                    state.setYTranslation(currentTop);
+                    state.setZTranslation(baseZ + (stackSize - s) * mPinnedZTranslationExtra);
+                    state.clipTopAmount = 0;
+                    state.clipBottomAmount = 0;
+                    state.setAlpha(Math.max(0.45f, 0.95f - (s - 1) * 0.15f));
+                    state.setScaleX(Math.max(0.85f, 0.95f - (s - 1) * 0.05f));
+                }
+            }
+        } else {
+            // EXPANDED HYPEROS 4 STACKED LIST MODE (Screenshot 3):
+            final float cardGap = 10f * density;
+            float currentTop = startTop;
+
+            for (int s = 0; s < stackSize; s++) {
+                int idx = notifIndices.get(s);
+                ExpandableView child = algorithmState.visibleChildren.get(idx);
+                if (child == null) continue;
+                ExpandableViewState state = child.getViewState();
+                if (state == null) continue;
+
+                state.setYTranslation(currentTop);
+                state.setZTranslation(baseZ + (stackSize - s) * mPinnedZTranslationExtra);
                 state.clipTopAmount = 0;
                 state.clipBottomAmount = 0;
                 state.setScaleX(1.0f);
                 state.setAlpha(1.0f);
-            } else {
-                // Card 1 peeks 14dp below Card 0. Subsequent cards peek 10dp below previous card.
-                currentTop += (s == 1) ? peekPxFirst : peekPxSubsequent;
-                state.setYTranslation(currentTop);
-                // Z decreases so each card is beneath the one above it.
-                state.setZTranslation(baseZ + (stackSize - s) * mPinnedZTranslationExtra);
-                // Don't clip the peeking area – it's intentionally visible.
-                state.clipTopAmount = 0;
-                state.clipBottomAmount = 0;
-                // Refined depth scale and progressive opacity hierarchy
-                state.setAlpha(Math.max(0.45f, 0.95f - (s - 1) * 0.15f));
-                state.setScaleX(Math.max(0.85f, 0.95f - (s - 1) * 0.05f));
+
+                int height = state.height > 0 ? state.height : child.getHeight();
+                if (height <= 0) height = (int) (68f * density);
+                currentTop += height + cardGap;
             }
         }
     }
