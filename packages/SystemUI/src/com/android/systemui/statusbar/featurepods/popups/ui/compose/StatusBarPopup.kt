@@ -143,21 +143,20 @@ fun StatusBarPopup(
         val alpha = remember { Animatable(0f) }
         val translationY = remember { Animatable(-24f) }
         val colorMode = rememberPopupColorMode()
-        val skipMotionOnDismiss = colorMode == POPUP_COLOR_MODE_BLUR
 
         LaunchedEffect(isVisible, popupBoundsInScreen != null) {
             if (isVisible && popupBoundsInScreen != null) {
                 scaleX.snapTo(initialScaleFromChip.x)
                 scaleY.snapTo(initialScaleFromChip.y)
                 alpha.snapTo(0f)
-                translationY.snapTo(-24f)
+                translationY.snapTo(-14f)
                 coroutineScope {
                     launch {
                         scaleX.animateTo(
                             targetValue = 1f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.58f,
+                                    dampingRatio = 0.70f,
                                     stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
@@ -167,7 +166,7 @@ fun StatusBarPopup(
                             targetValue = 1f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.62f,
+                                    dampingRatio = 0.72f,
                                     stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
@@ -177,57 +176,46 @@ fun StatusBarPopup(
                             targetValue = 0f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.65f,
+                                    dampingRatio = 0.72f,
                                     stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
                     }
-                    launch { alpha.animateTo(1f, animationSpec = tween(180)) }
+                    launch { alpha.animateTo(1f, animationSpec = tween(160)) }
                 }
             } else if (!isVisible) {
-                if (skipMotionOnDismiss) {
-                    coroutineScope {
-                        launch {
-                            scaleX.animateTo(
-                                targetValue = 0.01f,
-                                animationSpec = tween(130),
-                            )
-                        }
-                        launch {
-                            scaleY.animateTo(
-                                targetValue = 0.01f,
-                                animationSpec = tween(130),
-                            )
-                        }
-                        launch { alpha.animateTo(0f, animationSpec = tween(120)) }
+                coroutineScope {
+                    launch {
+                        scaleX.animateTo(
+                            targetValue = initialScaleFromChip.x,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = 0.82f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                        )
                     }
-                } else {
-                    coroutineScope {
-                        launch {
-                            scaleX.animateTo(
-                                targetValue = initialScaleFromChip.x,
-                                animationSpec =
-                                    spring(
-                                        dampingRatio = 0.8f,
-                                        stiffness = Spring.StiffnessMediumLow,
-                                    ),
-                            )
-                        }
-                        launch {
-                            scaleY.animateTo(
-                                targetValue = initialScaleFromChip.y,
-                                animationSpec =
-                                    spring(
-                                        dampingRatio = 0.8f,
-                                        stiffness = Spring.StiffnessMediumLow,
-                                    ),
-                            )
-                        }
-                        launch {
-                            translationY.animateTo(-16f, animationSpec = spring(stiffness = Spring.StiffnessMedium))
-                        }
-                        launch { alpha.animateTo(0f, animationSpec = tween(160)) }
+                    launch {
+                        scaleY.animateTo(
+                            targetValue = initialScaleFromChip.y,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = 0.82f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                        )
                     }
+                    launch {
+                        translationY.animateTo(
+                            targetValue = -12f,
+                            animationSpec =
+                                spring(
+                                    dampingRatio = 0.82f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                        )
+                    }
+                    launch { alpha.animateTo(0f, animationSpec = tween(180)) }
                 }
             }
         }
@@ -246,8 +234,8 @@ fun StatusBarPopup(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(animationSpec = tween(60)),
-            exit = fadeOut(animationSpec = tween(160)),
+            enter = fadeIn(animationSpec = tween(80)),
+            exit = fadeOut(animationSpec = tween(200)),
         ) {
             Box(
                 modifier =

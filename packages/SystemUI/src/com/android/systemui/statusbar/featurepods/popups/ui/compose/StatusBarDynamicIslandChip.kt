@@ -181,6 +181,13 @@ fun StatusBarDynamicIslandChip(
                     min = compactWidth ?: 0.dp,
                     max = compactWidth ?: (CompactIslandMaxWidth * widthScale),
                 )
+                .animateContentSize(
+                    animationSpec =
+                        spring(
+                            dampingRatio = 0.74f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        )
+                )
                 .graphicsLayer {
                     scaleX = collapseState.scaleX
                     scaleY = collapseState.scaleY
@@ -792,28 +799,20 @@ private fun rememberDynamicIslandCollapseState(isOpen: Boolean): DynamicIslandCo
                             scaleX.animateTo(
                                 targetValue = 1f,
                                 animationSpec =
-                                    keyframes {
-                                        durationMillis = 380
-                                        0f at 0
-                                        0.90f at 160 using FastOutSlowInEasing
-                                        1.06f at 260
-                                        0.98f at 320
-                                        1f at 380
-                                    },
+                                    spring(
+                                        dampingRatio = 0.68f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
                             )
                         }
                         launch {
                             scaleY.animateTo(
                                 targetValue = 1f,
                                 animationSpec =
-                                    keyframes {
-                                        durationMillis = 380
-                                        0f at 0
-                                        1.14f at 160 using FastOutSlowInEasing
-                                        0.92f at 260
-                                        1.03f at 320
-                                        1f at 380
-                                    },
+                                    spring(
+                                        dampingRatio = 0.65f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
                             )
                         }
                     }

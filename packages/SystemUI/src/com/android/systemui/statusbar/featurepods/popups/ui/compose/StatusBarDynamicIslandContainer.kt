@@ -18,6 +18,7 @@ package com.android.systemui.statusbar.featurepods.popups.ui.compose
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -25,13 +26,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -138,53 +141,62 @@ fun StatusBarDynamicIslandContainer(
             visible = selectedChip != null,
             enter =
                 scaleIn(
-                    initialScale = 0.25f,
+                    initialScale = 0.35f,
                     transformOrigin = TransformOrigin(0.5f, 0.5f),
                     animationSpec =
                         spring(
-                            dampingRatio = 0.60f,
+                            dampingRatio = 0.68f,
                             stiffness = Spring.StiffnessMediumLow,
                         ),
-                ) + fadeIn(animationSpec = tween(150)),
+                ) + fadeIn(animationSpec = tween(160)),
             exit =
                 scaleOut(
-                    targetScale = 0.25f,
+                    targetScale = 0.35f,
                     transformOrigin = TransformOrigin(0.5f, 0.5f),
                     animationSpec =
                         spring(
-                            dampingRatio = 0.82f,
+                            dampingRatio = 0.85f,
                             stiffness = Spring.StiffnessMediumLow,
                         ),
                 ) + fadeOut(animationSpec = tween(140)),
+            modifier = Modifier.clip(RoundedCornerShape(50)),
         ) {
             val currentChip = selectedChip ?: return@AnimatedVisibility
 
             AnimatedContent(
                 targetState = currentChip.chipId,
                 transitionSpec = {
-                    if (targetState == initialState) {
-                        fadeIn(animationSpec = tween(150)) togetherWith
-                            fadeOut(animationSpec = tween(150))
-                    } else {
-                        val slideDirection =
-                            if (
-                                chips.indexOfFirst { it.chipId == targetState } >
-                                    chips.indexOfFirst { it.chipId == initialState }
-                            ) {
-                                1
-                            } else {
-                                -1
-                            }
-                        (slideInHorizontally(
-                            animationSpec = tween(220),
-                            initialOffsetX = { fullWidth -> slideDirection * fullWidth / 2 },
-                        ) + fadeIn(animationSpec = tween(180))) togetherWith
-                            (slideOutHorizontally(
-                                animationSpec = tween(200),
-                                targetOffsetX = { fullWidth -> -slideDirection * fullWidth / 3 },
-                            ) + fadeOut(animationSpec = tween(140)))
-                    }
+                    val enterTransition =
+                        fadeIn(animationSpec = tween(180, delayMillis = 40)) +
+                            scaleIn(
+                                initialScale = 0.92f,
+                                animationSpec =
+                                    spring(
+                                        dampingRatio = 0.72f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                            )
+                    val exitTransition =
+                        fadeOut(animationSpec = tween(120)) +
+                            scaleOut(
+                                targetScale = 0.92f,
+                                animationSpec = tween(120),
+                            )
+
+                    (enterTransition togetherWith exitTransition).using(
+                        SizeTransform(clip = true) { _, _ ->
+                            spring(
+                                dampingRatio = 0.74f,
+                                stiffness = Spring.StiffnessMediumLow,
+                            )
+                        }
+                    )
                 },
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black),
+                contentAlignment = Alignment.Center,
                 label = "dynamic_island_chip",
             ) { chipId ->
                 val chip = chips.firstOrNull { it.chipId == chipId } ?: return@AnimatedContent
