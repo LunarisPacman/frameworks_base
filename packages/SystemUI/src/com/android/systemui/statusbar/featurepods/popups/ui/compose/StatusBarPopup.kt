@@ -281,7 +281,7 @@ fun StatusBarPopup(
                             MediaControlPopup(model = model, useWaveform = useWaveform)
                         }
                     }
-                    is PopupContentModel.Call -> CallPopup(model = popupContent.model)
+                    is PopupContentModel.Call -> Unit
                     is PopupContentModel.BluetoothAudio ->
                         BluetoothAudioPopup(model = popupContent.model)
                     is PopupContentModel.RingerMode ->

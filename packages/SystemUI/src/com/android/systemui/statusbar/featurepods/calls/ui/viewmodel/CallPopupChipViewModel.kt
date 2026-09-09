@@ -166,27 +166,12 @@ constructor(
         callerName: String,
         callerNumber: String?,
     ): PopupChipModel {
-        val popupModel =
-            CallPopupModel(
-                state = CallState.INCOMING,
-                callerName = callerName,
-                callerNumber = callerNumber,
-                callStartTimeMs = 0L,
-                answer = {
-                    triggerConfirmHaptic()
-                    stopIncomingHaptics()
-                    try {
-                        telecomManager?.acceptRingingCall()
-                    } catch (_: Exception) {}
-                },
-                declineOrHangup = {
-                    triggerDismissHaptic()
-                    stopIncomingHaptics()
-                    try {
-                        telecomManager?.endCall()
-                    } catch (_: Exception) {}
-                },
-            )
+        val openCallApp = {
+            try {
+                telecomManager?.showInCallScreen(false)
+            } catch (_: Exception) {}
+            Unit
+        }
 
         return PopupChipModel.Shown(
             chipId = PopupChipId.Call,
@@ -197,46 +182,27 @@ constructor(
                             Icon.Resource(
                                 resId = R.drawable.ic_call,
                                 contentDescription = ContentDescription.Loaded("Incoming Call"),
-                            )
+                            ),
+                        onClick = openCallApp,
                     )
                 ),
             chipText = callerName,
             colors = ColorsModel.SystemTheme,
-            popupContent = PopupContentModel.Call(popupModel),
+            popupContent = PopupContentModel.None,
+            isPopupShown = false,
+            showPopup = openCallApp,
+            hidePopup = {},
         )
     }
 
     private fun toOngoingCallChipModel(inCall: OngoingCallModel.InCall): PopupChipModel {
-        val popupModel =
-            CallPopupModel(
-                state = CallState.ONGOING,
-                callerName = inCall.appName.ifBlank { "Phone Call" },
-                callerNumber = null,
-                callStartTimeMs = inCall.startTimeMs,
-                isMuted = audioManager?.isMicrophoneMute == true,
-                isSpeakerOn = audioManager?.isSpeakerphoneOn == true,
-                toggleMute = {
-                    audioManager?.let {
-                        it.isMicrophoneMute = !it.isMicrophoneMute
-                        triggerConfirmHaptic()
-                    }
-                },
-                toggleSpeaker = {
-                    audioManager?.let {
-                        it.isSpeakerphoneOn = !it.isSpeakerphoneOn
-                        triggerConfirmHaptic()
-                    }
-                },
-                declineOrHangup = {
-                    triggerDismissHaptic()
-                    try {
-                        telecomManager?.endCall()
-                    } catch (_: Exception) {}
-                },
-                openApp = {
-                    inCall.intent?.let { activityStarter.postStartActivityDismissingKeyguard(it, null) }
-                },
-            )
+        val openApp = {
+            inCall.intent?.let { activityStarter.postStartActivityDismissingKeyguard(it, null) }
+                ?: try {
+                    telecomManager?.showInCallScreen(false)
+                } catch (_: Exception) {}
+            Unit
+        }
 
         return PopupChipModel.Shown(
             chipId = PopupChipId.Call,
@@ -247,12 +213,16 @@ constructor(
                             Icon.Resource(
                                 resId = R.drawable.ic_call,
                                 contentDescription = ContentDescription.Loaded("Ongoing Call"),
-                            )
+                            ),
+                        onClick = openApp,
                     )
                 ),
             chipText = null, // Will use chronometer in chip
             colors = ColorsModel.SystemTheme,
-            popupContent = PopupContentModel.Call(popupModel),
+            popupContent = PopupContentModel.None,
+            isPopupShown = false,
+            showPopup = openApp,
+            hidePopup = {},
         )
     }
 

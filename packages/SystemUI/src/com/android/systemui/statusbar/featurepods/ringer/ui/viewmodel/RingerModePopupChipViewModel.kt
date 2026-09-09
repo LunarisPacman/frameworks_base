@@ -25,6 +25,7 @@ import android.os.VibrationEffect
 import androidx.compose.runtime.getValue
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.broadcast.BroadcastDispatcher
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
@@ -57,6 +58,7 @@ class RingerModePopupChipViewModel
 @AssistedInject
 constructor(
     @Application private val context: Context,
+    private val broadcastDispatcher: BroadcastDispatcher,
     private val vibratorHelper: VibratorHelper,
 ) : StatusBarPopupChipViewModel, ExclusiveActivatable() {
 
@@ -73,12 +75,23 @@ constructor(
                     val audioManager = context.getSystemService(AudioManager::class.java)
                     lastMode = audioManager?.ringerModeInternal ?: AudioManager.RINGER_MODE_NORMAL
 
+                    val filter =
+                        IntentFilter().apply {
+                            addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
+                            addAction(AudioManager.INTERNAL_RINGER_MODE_CHANGED_ACTION)
+                        }
+
                     val receiver =
                         object : BroadcastReceiver() {
                             override fun onReceive(ctx: Context, intent: Intent) {
-                                if (intent.action == AudioManager.RINGER_MODE_CHANGED_ACTION) {
+                                val action = intent.action
+                                if (
+                                    action == AudioManager.RINGER_MODE_CHANGED_ACTION ||
+                                        action == AudioManager.INTERNAL_RINGER_MODE_CHANGED_ACTION
+                                ) {
                                     val newMode =
-                                        intent.getIntExtra(AudioManager.EXTRA_RINGER_MODE, -1)
+                                        audioManager?.ringerModeInternal
+                                            ?: intent.getIntExtra(AudioManager.EXTRA_RINGER_MODE, -1)
                                     if (newMode >= 0 && newMode != lastMode) {
                                         lastMode = newMode
                                         triggerRingerHaptic(newMode)
@@ -87,7 +100,7 @@ constructor(
                                         dismissJob?.cancel()
                                         dismissJob =
                                             launch {
-                                                delay(2500L)
+                                                delay(2800L)
                                                 trySend(null)
                                             }
                                     }
@@ -95,14 +108,10 @@ constructor(
                             }
                         }
 
-                    context.registerReceiver(
-                        receiver,
-                        IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION),
-                        Context.RECEIVER_NOT_EXPORTED,
-                    )
+                    broadcastDispatcher.registerReceiver(receiver, filter)
 
                     awaitClose {
-                        context.unregisterReceiver(receiver)
+                        broadcastDispatcher.unregisterReceiver(receiver)
                         dismissJob?.cancel()
                     }
                 }

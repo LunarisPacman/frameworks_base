@@ -17,9 +17,14 @@
 package com.android.systemui.statusbar.featurepods.popups.ui.compose
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -27,6 +32,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -128,68 +134,92 @@ fun StatusBarDynamicIslandContainer(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        if (selectedChip == null) return@Box
+        AnimatedVisibility(
+            visible = selectedChip != null,
+            enter =
+                scaleIn(
+                    initialScale = 0.25f,
+                    transformOrigin = TransformOrigin(0.5f, 0.5f),
+                    animationSpec =
+                        spring(
+                            dampingRatio = 0.60f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                ) + fadeIn(animationSpec = tween(150)),
+            exit =
+                scaleOut(
+                    targetScale = 0.25f,
+                    transformOrigin = TransformOrigin(0.5f, 0.5f),
+                    animationSpec =
+                        spring(
+                            dampingRatio = 0.82f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                ) + fadeOut(animationSpec = tween(140)),
+        ) {
+            val currentChip = selectedChip ?: return@AnimatedVisibility
 
-        AnimatedContent(
-            targetState = selectedChip.chipId,
-            transitionSpec = {
-                if (targetState == initialState) {
-                    fadeIn(animationSpec = tween(150)) togetherWith
-                        fadeOut(animationSpec = tween(150))
-                } else {
-                    val slideDirection =
-                        if (
-                            chips.indexOfFirst { it.chipId == targetState } >
-                                chips.indexOfFirst { it.chipId == initialState }
-                        ) {
-                            1
-                        } else {
-                            -1
-                        }
-                    (slideInHorizontally(
-                        animationSpec = tween(220),
-                        initialOffsetX = { fullWidth -> slideDirection * fullWidth / 2 },
-                    ) + fadeIn(animationSpec = tween(180))) togetherWith
-                        (slideOutHorizontally(
-                            animationSpec = tween(200),
-                            targetOffsetX = { fullWidth -> -slideDirection * fullWidth / 3 },
-                        ) + fadeOut(animationSpec = tween(140)))
-                }
-            },
-            label = "dynamic_island_chip",
-        ) { chipId ->
-            val chip = chips.firstOrNull { it.chipId == chipId } ?: return@AnimatedContent
-            var horizontalDragPx by remember(chipId, chips.size) { mutableFloatStateOf(0f) }
-            val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
-
-            StatusBarDynamicIslandChip(
-                viewModel = chip,
-                pageCount = chips.size,
-                cutoutSpec = cutoutSpec,
-                onChipBoundsChanged = { bounds -> anchorBounds = bounds },
-                modifier =
-                    Modifier.pointerInput(chips.size, chip.chipId) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = {
-                                when {
-                                    horizontalDragPx <= -thresholdPx -> selectRelative(1)
-                                    horizontalDragPx >= thresholdPx -> selectRelative(-1)
-                                }
-                                horizontalDragPx = 0f
-                            },
-                            onDragCancel = { horizontalDragPx = 0f },
-                            onHorizontalDrag = { change, dragAmount ->
-                                horizontalDragPx += dragAmount
-                                if (chips.size > 1 && abs(horizontalDragPx) > 8f) {
-                                    change.consume()
-                                }
-                            },
-                        )
-                    },
-                onTap = {
-                    if (chip.isPopupShown) chip.hidePopup() else chip.showPopup()
+            AnimatedContent(
+                targetState = currentChip.chipId,
+                transitionSpec = {
+                    if (targetState == initialState) {
+                        fadeIn(animationSpec = tween(150)) togetherWith
+                            fadeOut(animationSpec = tween(150))
+                    } else {
+                        val slideDirection =
+                            if (
+                                chips.indexOfFirst { it.chipId == targetState } >
+                                    chips.indexOfFirst { it.chipId == initialState }
+                            ) {
+                                1
+                            } else {
+                                -1
+                            }
+                        (slideInHorizontally(
+                            animationSpec = tween(220),
+                            initialOffsetX = { fullWidth -> slideDirection * fullWidth / 2 },
+                        ) + fadeIn(animationSpec = tween(180))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = tween(200),
+                                targetOffsetX = { fullWidth -> -slideDirection * fullWidth / 3 },
+                            ) + fadeOut(animationSpec = tween(140)))
+                    }
                 },
-            )
+                label = "dynamic_island_chip",
+            ) { chipId ->
+                val chip = chips.firstOrNull { it.chipId == chipId } ?: return@AnimatedContent
+                var horizontalDragPx by remember(chipId, chips.size) { mutableFloatStateOf(0f) }
+                val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
+
+                StatusBarDynamicIslandChip(
+                    viewModel = chip,
+                    pageCount = chips.size,
+                    cutoutSpec = cutoutSpec,
+                    onChipBoundsChanged = { bounds -> anchorBounds = bounds },
+                    modifier =
+                        Modifier.pointerInput(chips.size, chip.chipId) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    when {
+                                        horizontalDragPx <= -thresholdPx -> selectRelative(1)
+                                        horizontalDragPx >= thresholdPx -> selectRelative(-1)
+                                    }
+                                    horizontalDragPx = 0f
+                                },
+                                onDragCancel = { horizontalDragPx = 0f },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    horizontalDragPx += dragAmount
+                                    if (chips.size > 1 && abs(horizontalDragPx) > 8f) {
+                                        change.consume()
+                                    }
+                                },
+                            )
+                        },
+                    onTap = {
+                        if (chip.isPopupShown) chip.hidePopup() else chip.showPopup()
+                    },
+                )
+            }
         }
 
         popupAnchorChip?.let { anchoredChip ->

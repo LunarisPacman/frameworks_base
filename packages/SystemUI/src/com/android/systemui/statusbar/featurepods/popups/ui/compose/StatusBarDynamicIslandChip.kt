@@ -16,18 +16,25 @@
 
 package com.android.systemui.statusbar.featurepods.popups.ui.compose
 
+import android.media.AudioManager
 import android.view.DisplayCutout
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import com.android.systemui.statusbar.featurepods.bluetooth.shared.model.AudioDeviceKind
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -298,11 +305,11 @@ private fun UtilityStatusIslandChip(
     val rightSegmentWidth =
         when (viewModel.popupContent) {
             is PopupContentModel.Flashlight -> 52.dp
-            is PopupContentModel.Alarm -> 72.dp
-            is PopupContentModel.Call -> 72.dp
-            is PopupContentModel.RingerMode -> 64.dp
-            is PopupContentModel.BluetoothAudio -> 72.dp
-            else -> 80.dp
+            is PopupContentModel.Alarm -> 76.dp
+            is PopupContentModel.Call -> 100.dp
+            is PopupContentModel.RingerMode -> 80.dp
+            is PopupContentModel.BluetoothAudio -> 104.dp
+            else -> 88.dp
         } * widthScale
     val connectedIslandWidth =
         ((CompactUtilityConnectedIslandChromeWidth * widthScale) +
@@ -349,16 +356,41 @@ private fun UtilityStatusIslandChip(
                 .background(Color.Black)
                 .border(width = 1.dp, color = chipOutline, shape = RoundedCornerShape(50))
                 .clickable(onClick = onTap)
+                .animateContentSize(
+                    animationSpec =
+                        spring(
+                            dampingRatio = 0.72f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        )
+                )
                 .graphicsLayer { alpha = collapseState.contentAlpha },
         horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(modifier = Modifier.width(10.dp * widthScale))
-        Icon(
-            icon = viewModel.icons.first().icon,
-            modifier = Modifier.size(16.dp),
-            tint = chipContentColor,
-        )
+        when (val content = viewModel.popupContent) {
+            is PopupContentModel.BluetoothAudio ->
+                AnimatedBluetoothAudioIcon(
+                    deviceKind = content.model.deviceKind,
+                    color = chipContentColor,
+                )
+            is PopupContentModel.RingerMode ->
+                AnimatedRingerIcon(
+                    mode = content.model.mode,
+                    color = chipContentColor,
+                )
+            is PopupContentModel.Call ->
+                AnimatedCallIcon(
+                    isIncoming = viewModel.chipText != null,
+                    color = chipContentColor,
+                )
+            else ->
+                Icon(
+                    icon = viewModel.icons.first().icon,
+                    modifier = Modifier.size(16.dp),
+                    tint = chipContentColor,
+                )
+        }
         Spacer(modifier = Modifier.width(cutoutSpec.embeddedGapWidth))
         Box(
             modifier =
@@ -378,10 +410,206 @@ private fun UtilityStatusIslandChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.End,
+                softWrap = false,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
         Spacer(modifier = Modifier.width(10.dp * widthScale))
+    }
+}
+
+@Composable
+private fun AnimatedBluetoothAudioIcon(
+    deviceKind: AudioDeviceKind,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val scale = remember { Animatable(0.4f) }
+    val rotation = remember { Animatable(-18f) }
+    val bobOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec =
+                    spring(
+                        dampingRatio = 0.52f,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+            )
+        }
+        launch {
+            rotation.animateTo(
+                targetValue = 0f,
+                animationSpec =
+                    spring(
+                        dampingRatio = 0.55f,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+            )
+        }
+        delay(400)
+        bobOffset.animateTo(
+            targetValue = -1.5f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(900, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+        )
+    }
+
+    val iconRes =
+        when (deviceKind) {
+            AudioDeviceKind.HEADPHONES -> com.android.settingslib.R.drawable.ic_headphone
+            AudioDeviceKind.EARPHONES -> com.android.settingslib.R.drawable.ic_bt_untethered_earbuds
+            AudioDeviceKind.SPEAKER -> com.android.settingslib.R.drawable.ic_bt_le_audio_speakers
+            AudioDeviceKind.CAR -> com.android.systemui.res.R.drawable.ic_bluetooth_connected
+            AudioDeviceKind.OTHER -> com.android.settingslib.R.drawable.ic_headphone
+        }
+
+    Box(
+        modifier =
+            modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                rotationZ = rotation.value
+                translationY = bobOffset.value
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon = IconModel.Resource(iconRes, null),
+            modifier = Modifier.size(17.dp),
+            tint = color,
+        )
+    }
+}
+
+@Composable
+private fun AnimatedRingerIcon(
+    mode: Int,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val rotation = remember { Animatable(0f) }
+    val shakeX = remember { Animatable(0f) }
+    val scale = remember { Animatable(0.4f) }
+
+    LaunchedEffect(mode) {
+        launch {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
+            )
+        }
+        when (mode) {
+            AudioManager.RINGER_MODE_NORMAL -> {
+                rotation.animateTo(
+                    targetValue = 0f,
+                    animationSpec =
+                        keyframes {
+                            durationMillis = 650
+                            0f at 0
+                            -22f at 80 using FastOutSlowInEasing
+                            22f at 180 using FastOutSlowInEasing
+                            -14f at 280
+                            14f at 380
+                            -6f at 480
+                            0f at 650
+                        },
+                )
+            }
+            AudioManager.RINGER_MODE_VIBRATE -> {
+                shakeX.animateTo(
+                    targetValue = 0f,
+                    animationSpec =
+                        keyframes {
+                            durationMillis = 500
+                            0f at 0
+                            -3.5f at 50
+                            3.5f at 100
+                            -3f at 150
+                            3f at 200
+                            -2f at 250
+                            2f at 300
+                            -1f at 380
+                            0f at 500
+                        },
+                )
+            }
+            AudioManager.RINGER_MODE_SILENT -> {
+                shakeX.snapTo(0f)
+                rotation.snapTo(0f)
+            }
+        }
+    }
+
+    val (iconRes, iconTint) =
+        when (mode) {
+            AudioManager.RINGER_MODE_SILENT ->
+                com.android.systemui.res.R.drawable.ic_volume_ringer_mute to Color(0xFFFF5252)
+            AudioManager.RINGER_MODE_VIBRATE ->
+                com.android.systemui.res.R.drawable.ic_volume_ringer_vibrate to Color(0xFFFFB74D)
+            else ->
+                com.android.systemui.res.R.drawable.ic_volume_ringer to color
+        }
+
+    Box(
+        modifier =
+            modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                rotationZ = rotation.value
+                translationX = shakeX.value
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon = IconModel.Resource(iconRes, null),
+            modifier = Modifier.size(17.dp),
+            tint = iconTint,
+        )
+    }
+}
+
+@Composable
+private fun AnimatedCallIcon(
+    isIncoming: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val scale = remember { Animatable(1f) }
+
+    LaunchedEffect(isIncoming) {
+        if (isIncoming) {
+            scale.animateTo(
+                targetValue = 1.22f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(450, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+            )
+        } else {
+            scale.snapTo(1f)
+        }
+    }
+
+    Box(
+        modifier =
+            modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon = IconModel.Resource(com.android.systemui.res.R.drawable.ic_call, null),
+            modifier = Modifier.size(16.dp),
+            tint = if (isIncoming) Color(0xFF4CAF50) else color,
+        )
     }
 }
 
@@ -430,7 +658,7 @@ private val CompactAlarmIslandWidth = 92.dp
 private val CompactUtilityIslandWidth = 74.dp
 private val CompactUtilityConnectedIslandChromeWidth = 42.dp
 private val CompactUtilityConnectedIslandMinWidth = 132.dp
-private val CompactUtilityConnectedIslandMaxWidth = 188.dp
+private val CompactUtilityConnectedIslandMaxWidth = 236.dp
 private val DynamicIslandEmbeddedGapFallbackWidth = 38.dp
 private val DynamicIslandEmbeddedGapMinWidth = 34.dp
 private val DynamicIslandEmbeddedGapMaxWidth = 88.dp
@@ -500,9 +728,9 @@ private fun compactIslandWidthFor(content: PopupContentModel): Dp? {
         is PopupContentModel.Stopwatch -> CompactTimerIslandWidth
         is PopupContentModel.Alarm -> CompactAlarmIslandWidth
         is PopupContentModel.Flashlight -> CompactUtilityIslandWidth
-        is PopupContentModel.Call -> CompactTimerIslandWidth
-        is PopupContentModel.RingerMode -> CompactAlarmIslandWidth
-        is PopupContentModel.BluetoothAudio -> CompactMediaIslandWidth
+        is PopupContentModel.Call -> 130.dp
+        is PopupContentModel.RingerMode -> 116.dp
+        is PopupContentModel.BluetoothAudio -> 138.dp
         else -> null
     }
 }
