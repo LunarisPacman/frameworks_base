@@ -568,7 +568,8 @@ private fun KeyguardChipBody(
                     modifier = Modifier.weight(1f, fill = false),
                 ) { ev ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        KeyguardPrimaryText(ev, contentColor, Modifier.weight(1f, fill = false).widthIn(max = 110.dp), batteryString)
+                        val maxPrimaryWidth = if (ev is IslandEvent.Charging) 145.dp else 110.dp
+                        KeyguardPrimaryText(ev, contentColor, Modifier.weight(1f, fill = false).widthIn(max = maxPrimaryWidth), batteryString)
                         val secondary = secondaryTextFor(ev)
                         if (secondary != null) {
                             Text(

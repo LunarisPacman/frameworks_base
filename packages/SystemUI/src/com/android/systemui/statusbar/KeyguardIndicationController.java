@@ -88,6 +88,7 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.app.IBatteryStats;
+import com.android.internal.os.PowerProfile;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.keyguard.KeyguardUpdateMonitorCallback;
@@ -248,6 +249,8 @@ public class KeyguardIndicationController {
     private float mChargingCurrent;
     private float mChargingVoltage;
     private float mTemperature;
+    private BatteryManager mBatteryManager;
+    private PowerProfile mPowerProfile;
     private Pair<String, BiometricSourceType> mBiometricErrorMessageToShowOnScreenOn;
     private Set<Integer> mCoExFaceAcquisitionMsgIdsToShow;
     private final FaceHelpMessageDeferral mFaceAcquiredMessageDeferral;
@@ -1390,11 +1393,11 @@ public class KeyguardIndicationController {
      */
     protected String computePowerIndication() {
         if (mBatteryDefender) {
-            String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            String percentage = getDecimalBatteryPercentage();
             return mContext.getResources().getString(
                     R.string.keyguard_plugged_in_charging_limited, percentage);
         } else if (mPowerPluggedIn && mIncompatibleCharger) {
-            String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+            String percentage = getDecimalBatteryPercentage();
             return mContext.getResources().getString(
                     R.string.keyguard_plugged_in_incompatible_charger, percentage);
         }
@@ -1402,12 +1405,42 @@ public class KeyguardIndicationController {
         return computePowerChargingStringIndication();
     }
 
+    private String getDecimalBatteryPercentage() {
+        if (mBatteryManager == null) {
+            mBatteryManager = mContext.getSystemService(BatteryManager.class);
+        }
+        if (mBatteryManager != null) {
+            int chargeCounterUah = mBatteryManager.getIntProperty(
+                    BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
+            if (chargeCounterUah > 0 && chargeCounterUah != Integer.MIN_VALUE) {
+                if (mPowerProfile == null) {
+                    mPowerProfile = new PowerProfile(mContext);
+                }
+                double capacityMah = mPowerProfile.getBatteryCapacity();
+                double exact = -1.0;
+                if (capacityMah > 0) {
+                    exact = (chargeCounterUah / (capacityMah * 1000.0)) * 100.0;
+                } else if (mBatteryLevel > 0) {
+                    double estimatedFull = chargeCounterUah / (mBatteryLevel / 100.0);
+                    if (estimatedFull > 0) {
+                        exact = (chargeCounterUah / estimatedFull) * 100.0;
+                    }
+                }
+                if (exact >= 0.0) {
+                    exact = Math.min(100.0, Math.max(0.0, exact));
+                    return String.format(Locale.US, "%.2f%%", exact);
+                }
+            }
+        }
+        return NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+    }
+
     protected String computePowerChargingStringIndication() {
         if (mPowerCharged) {
             return mContext.getResources().getString(R.string.keyguard_charged);
         }
 
-        String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+        String percentage = getDecimalBatteryPercentage();
         if (mBatteryDead) {
             return mContext.getResources().getString(R.string.keyguard_plugged_in, percentage);
         }
