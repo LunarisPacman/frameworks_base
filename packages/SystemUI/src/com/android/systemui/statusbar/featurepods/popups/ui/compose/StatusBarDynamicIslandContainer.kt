@@ -73,6 +73,8 @@ fun StatusBarDynamicIslandContainer(
         selectedChipId =
             when {
                 newestChipId != null -> newestChipId
+                chips.any { it.chipId == PopupChipId.Call } -> PopupChipId.Call
+                chips.any { it.chipId == PopupChipId.RingerMode } -> PopupChipId.RingerMode
                 chips.any { it.chipId == selectedChipId } -> selectedChipId
                 else -> chips.firstOrNull()?.chipId
             }

@@ -17,10 +17,13 @@
 package com.android.systemui.statusbar.featurepods.popups.ui.model
 
 import com.android.systemui.statusbar.featurepods.alarm.shared.model.AlarmPopupModel
+import com.android.systemui.statusbar.featurepods.bluetooth.shared.model.BluetoothAudioPopupModel
+import com.android.systemui.statusbar.featurepods.calls.shared.model.CallPopupModel
 import com.android.systemui.statusbar.featurepods.flashlight.shared.model.FlashlightPopupModel
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.statusbar.featurepods.livescore.shared.model.LiveScoreChipModel
 import com.android.systemui.statusbar.featurepods.media.shared.model.MediaControlChipModel
+import com.android.systemui.statusbar.featurepods.ringer.shared.model.RingerModePopupModel
 import com.android.systemui.statusbar.featurepods.screenrecord.shared.model.ScreenRecordPopupModel
 import com.android.systemui.statusbar.featurepods.stopwatch.shared.model.StopwatchPopupModel
 
@@ -29,6 +32,12 @@ import com.android.systemui.statusbar.featurepods.stopwatch.shared.model.Stopwat
  * displaying its popup at a time.
  */
 sealed class PopupChipId(val value: String) {
+    data object Call : PopupChipId("Call")
+
+    data object RingerMode : PopupChipId("RingerMode")
+
+    data object BluetoothAudio : PopupChipId("BluetoothAudio")
+
     data object MediaControl : PopupChipId("MediaControl")
 
     data object ScreenRecord : PopupChipId("ScreenRecord")
@@ -61,6 +70,12 @@ sealed interface HoverBehavior {
 /** Rich popup contents associated with a status bar chip. */
 sealed interface PopupContentModel {
     data object None : PopupContentModel
+
+    data class Call(val model: CallPopupModel) : PopupContentModel
+
+    data class RingerMode(val model: RingerModePopupModel) : PopupContentModel
+
+    data class BluetoothAudio(val model: BluetoothAudioPopupModel) : PopupContentModel
 
     data class Media(
         val model: MediaControlChipModel,

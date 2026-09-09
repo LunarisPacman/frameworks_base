@@ -31,6 +31,8 @@ import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInterac
 import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.statusbar.featurepods.alarm.ui.viewmodel.AlarmPopupChipViewModel
+import com.android.systemui.statusbar.featurepods.bluetooth.ui.viewmodel.BluetoothAudioPopupChipViewModel
+import com.android.systemui.statusbar.featurepods.calls.ui.viewmodel.CallPopupChipViewModel
 import com.android.systemui.statusbar.featurepods.flashlight.ui.viewmodel.FlashlightPopupChipViewModel
 import com.android.systemui.statusbar.featurepods.livescore.ui.viewmodel.LiveScorePopupChipViewModel
 import com.android.systemui.statusbar.featurepods.av.ui.viewmodel.AvControlsChipViewModel
@@ -38,6 +40,7 @@ import com.android.systemui.statusbar.featurepods.media.ui.viewmodel.MediaContro
 import com.android.systemui.statusbar.featurepods.popups.StatusBarPopupChips
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.featurepods.ringer.ui.viewmodel.RingerModePopupChipViewModel
 import com.android.systemui.statusbar.featurepods.screenrecord.ui.viewmodel.ScreenRecordPopupChipViewModel
 import com.android.systemui.statusbar.featurepods.sharescreen.ui.viewmodel.ShareScreenPrivacyIndicatorViewModel
 import com.android.systemui.statusbar.featurepods.stopwatch.ui.viewmodel.StopwatchPopupChipViewModel
@@ -57,6 +60,9 @@ class StatusBarPopupChipsViewModel
 constructor(
     @Application private val context: Context,
     private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
+    callChipFactory: CallPopupChipViewModel.Factory,
+    ringerModeChipFactory: RingerModePopupChipViewModel.Factory,
+    bluetoothAudioChipFactory: BluetoothAudioPopupChipViewModel.Factory,
     mediaControlChipFactory: MediaControlChipViewModel.Factory,
     screenRecordChipFactory: ScreenRecordPopupChipViewModel.Factory,
     liveScoreChipFactory: LiveScorePopupChipViewModel.Factory,
@@ -67,6 +73,9 @@ constructor(
     shareScreenPrivacyIndicatorFactory: ShareScreenPrivacyIndicatorViewModel.Factory,
 ) : ExclusiveActivatable() {
 
+    private val callChip by lazy { callChipFactory.create() }
+    private val ringerModeChip by lazy { ringerModeChipFactory.create() }
+    private val bluetoothAudioChip by lazy { bluetoothAudioChipFactory.create() }
     private val mediaControlChip by lazy { mediaControlChipFactory.create() }
     private val screenRecordChip by lazy { screenRecordChipFactory.create() }
     private val liveScoreChip by lazy { liveScoreChipFactory.create() }
@@ -92,6 +101,9 @@ constructor(
 
     private val incomingPopupChipBundle: PopupChipBundle by derivedStateOf {
         PopupChipBundle(
+            call = callChip.chip,
+            ringerMode = ringerModeChip.chip,
+            bluetooth = bluetoothAudioChip.chip,
             media = mediaControlChip.chip,
             screenRecord = screenRecordChip.chip,
             liveScore = liveScoreChip.chip,
@@ -112,6 +124,9 @@ constructor(
         val candidateChips =
             if (StatusBarPopupChips.isEnabled) {
                 listOfNotNull(
+                    bundle.call,
+                    bundle.ringerMode,
+                    bundle.bluetooth,
                     bundle.media,
                     bundle.screenRecord,
                     bundle.liveScore,
@@ -124,6 +139,9 @@ constructor(
             } else {
                 // Keep media ticker available even when popup chips modernization is disabled.
                 listOfNotNull(
+                    bundle.call,
+                    bundle.ringerMode,
+                    bundle.bluetooth,
                     bundle.media,
                     bundle.screenRecord,
                     bundle.liveScore,
@@ -157,6 +175,9 @@ constructor(
                 keyguardTransitionInteractor.isFinishedIn(KeyguardState.LOCKSCREEN)
                     .collectLatest { isOnLockscreen = it }
             }
+            launch { callChip.activate() }
+            launch { ringerModeChip.activate() }
+            launch { bluetoothAudioChip.activate() }
             launch { avControlsChip.activate() }
             launch { mediaControlChip.activate() }
             launch { screenRecordChip.activate() }
@@ -174,6 +195,9 @@ constructor(
     }
 
     private data class PopupChipBundle(
+        val call: PopupChipModel = PopupChipModel.Hidden(chipId = PopupChipId.Call),
+        val ringerMode: PopupChipModel = PopupChipModel.Hidden(chipId = PopupChipId.RingerMode),
+        val bluetooth: PopupChipModel = PopupChipModel.Hidden(chipId = PopupChipId.BluetoothAudio),
         val media: PopupChipModel = PopupChipModel.Hidden(chipId = PopupChipId.MediaControl),
         val screenRecord: PopupChipModel =
             PopupChipModel.Hidden(chipId = PopupChipId.ScreenRecord),

@@ -174,7 +174,10 @@ fun StatusBarDynamicIslandChip(
                     min = compactWidth ?: 0.dp,
                     max = compactWidth ?: (CompactIslandMaxWidth * widthScale),
                 )
-                .graphicsLayer { scaleX = collapseState.scale }
+                .graphicsLayer {
+                    scaleX = collapseState.scaleX
+                    scaleY = collapseState.scaleY
+                }
                 .clip(chipShape)
                 .background(Color.Black)
                 .border(width = 1.dp, color = chipOutline, shape = chipShape)
@@ -296,6 +299,9 @@ private fun UtilityStatusIslandChip(
         when (viewModel.popupContent) {
             is PopupContentModel.Flashlight -> 52.dp
             is PopupContentModel.Alarm -> 72.dp
+            is PopupContentModel.Call -> 72.dp
+            is PopupContentModel.RingerMode -> 64.dp
+            is PopupContentModel.BluetoothAudio -> 72.dp
             else -> 80.dp
         } * widthScale
     val connectedIslandWidth =
@@ -319,13 +325,24 @@ private fun UtilityStatusIslandChip(
                     ?: rememberElapsedDurationText(popupContent.model.baseElapsedRealtimeMs)
             is PopupContentModel.Alarm -> viewModel.chipText.orEmpty()
             is PopupContentModel.Flashlight -> viewModel.chipText.orEmpty()
+            is PopupContentModel.Call ->
+                if (popupContent.model.state == com.android.systemui.statusbar.featurepods.calls.shared.model.CallState.ONGOING && popupContent.model.callStartTimeMs > 0) {
+                    rememberElapsedDurationText(popupContent.model.callStartTimeMs)
+                } else {
+                    viewModel.chipText.orEmpty()
+                }
+            is PopupContentModel.RingerMode -> popupContent.model.label
+            is PopupContentModel.BluetoothAudio -> viewModel.chipText.orEmpty()
             else -> ""
         }
 
     Row(
         modifier =
             modifier
-                .graphicsLayer { scaleX = collapseState.scale }
+                .graphicsLayer {
+                    scaleX = collapseState.scaleX
+                    scaleY = collapseState.scaleY
+                }
                 .defaultMinSize(minHeight = 32.dp * heightScale)
                 .width(connectedIslandWidth)
                 .clip(RoundedCornerShape(50))
@@ -440,7 +457,7 @@ fun rememberDynamicIslandCutoutSpec(): DynamicIslandCutoutSpec {
     return with(density) {
         if (topCutout == null || rootWidthPx <= 0) {
             DynamicIslandCutoutSpec(
-                embeddedGapWidth = DynamicIslandEmbeddedGapFallbackWidth,
+                embeddedGapWidth = 0.dp,
                 horizontalOffset = 0.dp,
             )
         } else {
@@ -466,7 +483,10 @@ private fun PopupContentModel.isUtilityStatusContent(): Boolean {
     return this is PopupContentModel.ScreenRecord ||
         this is PopupContentModel.Stopwatch ||
         this is PopupContentModel.Alarm ||
-        this is PopupContentModel.Flashlight
+        this is PopupContentModel.Flashlight ||
+        this is PopupContentModel.Call ||
+        this is PopupContentModel.RingerMode ||
+        this is PopupContentModel.BluetoothAudio
 }
 
 private fun compactIslandWidthFor(content: PopupContentModel): Dp? {
@@ -480,6 +500,9 @@ private fun compactIslandWidthFor(content: PopupContentModel): Dp? {
         is PopupContentModel.Stopwatch -> CompactTimerIslandWidth
         is PopupContentModel.Alarm -> CompactAlarmIslandWidth
         is PopupContentModel.Flashlight -> CompactUtilityIslandWidth
+        is PopupContentModel.Call -> CompactTimerIslandWidth
+        is PopupContentModel.RingerMode -> CompactAlarmIslandWidth
+        is PopupContentModel.BluetoothAudio -> CompactMediaIslandWidth
         else -> null
     }
 }
@@ -496,11 +519,16 @@ private fun rememberDynamicIslandSizeScale(): Pair<Float, Float> {
     return widthScale to heightScale
 }
 
-private data class DynamicIslandCollapseState(val scale: Float, val contentAlpha: Float)
+private data class DynamicIslandCollapseState(
+    val scaleX: Float,
+    val scaleY: Float,
+    val contentAlpha: Float,
+)
 
 @Composable
 private fun rememberDynamicIslandCollapseState(isOpen: Boolean): DynamicIslandCollapseState {
     val scaleX = remember { Animatable(1f, visibilityThreshold = 0.0005f) }
+    val scaleY = remember { Animatable(1f, visibilityThreshold = 0.0005f) }
     val currentIsOpen by rememberUpdatedState(isOpen)
 
     LaunchedEffect(Unit) {
@@ -508,32 +536,69 @@ private fun rememberDynamicIslandCollapseState(isOpen: Boolean): DynamicIslandCo
             .drop(1)
             .collectLatest { open ->
                 if (open) {
-                    scaleX.animateTo(
-                        targetValue = 0f,
-                        animationSpec =
-                            spring(
-                                dampingRatio = 0.9f,
-                                stiffness = Spring.StiffnessMediumLow,
-                            ),
-                    )
+                    coroutineScope {
+                        launch {
+                            scaleX.animateTo(
+                                targetValue = 0f,
+                                animationSpec =
+                                    spring(
+                                        dampingRatio = 0.72f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                            )
+                        }
+                        launch {
+                            scaleY.animateTo(
+                                targetValue = 0f,
+                                animationSpec =
+                                    spring(
+                                        dampingRatio = 0.65f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                            )
+                        }
+                    }
                 } else {
-                    scaleX.animateTo(
-                        targetValue = 1f,
-                        animationSpec =
-                            keyframes {
-                                durationMillis = 380
-                                0f at 0
-                                1.08f at 240 using FastOutSlowInEasing
-                                0.96f at 320
-                                1f at 380
-                            },
-                    )
+                    coroutineScope {
+                        launch {
+                            scaleX.animateTo(
+                                targetValue = 1f,
+                                animationSpec =
+                                    keyframes {
+                                        durationMillis = 380
+                                        0f at 0
+                                        0.90f at 160 using FastOutSlowInEasing
+                                        1.06f at 260
+                                        0.98f at 320
+                                        1f at 380
+                                    },
+                            )
+                        }
+                        launch {
+                            scaleY.animateTo(
+                                targetValue = 1f,
+                                animationSpec =
+                                    keyframes {
+                                        durationMillis = 380
+                                        0f at 0
+                                        1.14f at 160 using FastOutSlowInEasing
+                                        0.92f at 260
+                                        1.03f at 320
+                                        1f at 380
+                                    },
+                            )
+                        }
+                    }
                 }
             }
     }
     val fadeThreshold = 0.7f
     val alpha = (scaleX.value / fadeThreshold).coerceIn(0f, 1f)
-    return DynamicIslandCollapseState(scale = scaleX.value, contentAlpha = alpha)
+    return DynamicIslandCollapseState(
+        scaleX = scaleX.value,
+        scaleY = scaleY.value,
+        contentAlpha = alpha,
+    )
 }
 
 private fun LayoutCoordinates.boundsInScreen(view: android.view.View): Rect {

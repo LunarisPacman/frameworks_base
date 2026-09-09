@@ -17,6 +17,7 @@
 package com.android.systemui.statusbar.featurepods.popups.ui.compose
 
 import android.view.ViewTreeObserver
+import com.android.systemui.res.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -52,9 +53,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.android.systemui.res.R
 import com.android.systemui.statusbar.featurepods.alarm.ui.compose.AlarmPopup
 import com.android.systemui.statusbar.featurepods.av.ui.compose.AvControlsChipPopup
+import com.android.systemui.statusbar.featurepods.bluetooth.ui.compose.BluetoothAudioPopup
+import com.android.systemui.statusbar.featurepods.calls.ui.compose.CallPopup
 import com.android.systemui.statusbar.featurepods.flashlight.ui.compose.FlashlightPopup
 import com.android.systemui.statusbar.featurepods.livescore.ui.compose.LiveScorePopup
 import com.android.systemui.statusbar.featurepods.media.ui.compose.MediaControlPopup
@@ -62,6 +64,7 @@ import com.android.systemui.statusbar.featurepods.media.ui.compose.LyricsCard
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.featurepods.ringer.ui.compose.RingerModePopup
 import com.android.systemui.statusbar.featurepods.screenrecord.ui.compose.ScreenRecordPopup
 import com.android.systemui.statusbar.featurepods.sharescreen.ui.compose.ShareScreenPrivacyIndicatorPopup
 import com.android.systemui.statusbar.featurepods.stopwatch.ui.compose.StopwatchPopup
@@ -154,8 +157,8 @@ fun StatusBarPopup(
                             targetValue = 1f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.6f,
-                                    stiffness = Spring.StiffnessLow,
+                                    dampingRatio = 0.58f,
+                                    stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
                     }
@@ -164,8 +167,8 @@ fun StatusBarPopup(
                             targetValue = 1f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.65f,
-                                    stiffness = Spring.StiffnessLow,
+                                    dampingRatio = 0.62f,
+                                    stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
                     }
@@ -174,7 +177,7 @@ fun StatusBarPopup(
                             targetValue = 0f,
                             animationSpec =
                                 spring(
-                                    dampingRatio = 0.7f,
+                                    dampingRatio = 0.65f,
                                     stiffness = Spring.StiffnessMediumLow,
                                 ),
                         )
@@ -278,6 +281,11 @@ fun StatusBarPopup(
                             MediaControlPopup(model = model, useWaveform = useWaveform)
                         }
                     }
+                    is PopupContentModel.Call -> CallPopup(model = popupContent.model)
+                    is PopupContentModel.BluetoothAudio ->
+                        BluetoothAudioPopup(model = popupContent.model)
+                    is PopupContentModel.RingerMode ->
+                        RingerModePopup(model = popupContent.model)
                     is PopupContentModel.ScreenRecord -> ScreenRecordPopup(model = popupContent.model)
                     is PopupContentModel.LiveScore -> LiveScorePopup(model = popupContent.model)
                     is PopupContentModel.Flashlight -> FlashlightPopup(model = popupContent.model)
