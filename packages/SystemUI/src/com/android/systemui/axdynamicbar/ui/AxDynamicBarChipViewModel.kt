@@ -185,14 +185,13 @@ constructor(
             keyguardBatteryInfo,
             batteryIndicationTick.onStart { emit(Unit) },
             liveChargingTicker,
-        ) { info, _, _ -> info }
-            .map {
-                if (it.isCharging) {
-                    formatChargingString(keyguardIndicationController.powerChargingString)
-                } else {
-                    ""
-                }
+        ) { info, _, _ ->
+            if (info.isCharging) {
+                formatChargingString(keyguardIndicationController.powerChargingString)
+            } else {
+                ""
             }
+        }
             .distinctUntilChanged()
             .stateIn(applicationScope, SharingStarted.Lazily, "")
 

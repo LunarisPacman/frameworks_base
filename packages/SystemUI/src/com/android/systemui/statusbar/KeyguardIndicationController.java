@@ -251,6 +251,9 @@ public class KeyguardIndicationController {
     private float mTemperature;
     private BatteryManager mBatteryManager;
     private PowerProfile mPowerProfile;
+    private long mFullCapacityUah = -1;
+    private long mEstimatedFullUah = -1;
+    private int mCalibratedLevel = -1;
     private Pair<String, BiometricSourceType> mBiometricErrorMessageToShowOnScreenOn;
     private Set<Integer> mCoExFaceAcquisitionMsgIdsToShow;
     private final FaceHelpMessageDeferral mFaceAcquiredMessageDeferral;
@@ -1413,19 +1416,47 @@ public class KeyguardIndicationController {
             int chargeCounterUah = mBatteryManager.getIntProperty(
                     BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
             if (chargeCounterUah > 0 && chargeCounterUah != Integer.MIN_VALUE) {
-                if (mPowerProfile == null) {
-                    mPowerProfile = new PowerProfile(mContext);
-                }
-                double capacityMah = mPowerProfile.getBatteryCapacity();
-                double exact = -1.0;
-                if (capacityMah > 0) {
-                    exact = (chargeCounterUah / (capacityMah * 1000.0)) * 100.0;
-                } else if (mBatteryLevel > 0) {
-                    double estimatedFull = chargeCounterUah / (mBatteryLevel / 100.0);
-                    if (estimatedFull > 0) {
-                        exact = (chargeCounterUah / estimatedFull) * 100.0;
+                // 1. Try to obtain total capacity from sticky intent if not already cached
+                if (mFullCapacityUah <= 0) {
+                    Intent batteryIntent = mContext.registerReceiver(null,
+                            new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                    if (batteryIntent != null) {
+                        int maxCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_MAXIMUM_CAPACITY, -1);
+                        int desCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_DESIGN_CAPACITY, -1);
+                        if (maxCap > 0) {
+                            mFullCapacityUah = maxCap;
+                        } else if (desCap > 0) {
+                            mFullCapacityUah = desCap;
+                        }
                     }
                 }
+
+                // 2. Try PowerProfile
+                if (mFullCapacityUah <= 0) {
+                    if (mPowerProfile == null) {
+                        mPowerProfile = new PowerProfile(mContext);
+                    }
+                    double capacityMah = mPowerProfile.getBatteryCapacity();
+                    if (capacityMah > 0) {
+                        mFullCapacityUah = (long) (capacityMah * 1000.0);
+                    }
+                }
+
+                double exact = -1.0;
+                if (mFullCapacityUah > 0) {
+                    exact = (chargeCounterUah / (double) mFullCapacityUah) * 100.0;
+                } else if (mBatteryLevel > 0) {
+                    // 3. Fallback: lock in estimated full capacity once per battery level step
+                    // so chargeCounter increases the decimal value continuously.
+                    if (mEstimatedFullUah <= 0 || mCalibratedLevel != mBatteryLevel) {
+                        mEstimatedFullUah = (long) (chargeCounterUah / (mBatteryLevel / 100.0));
+                        mCalibratedLevel = mBatteryLevel;
+                    }
+                    if (mEstimatedFullUah > 0) {
+                        exact = (chargeCounterUah / (double) mEstimatedFullUah) * 100.0;
+                    }
+                }
+
                 if (exact >= 0.0) {
                     exact = Math.min(100.0, Math.max(0.0, exact));
                     return String.format(Locale.US, "%.2f%%", exact);
