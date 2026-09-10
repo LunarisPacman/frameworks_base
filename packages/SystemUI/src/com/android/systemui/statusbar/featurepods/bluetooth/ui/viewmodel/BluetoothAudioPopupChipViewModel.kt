@@ -272,12 +272,8 @@ constructor(
                 AudioDeviceKind.OTHER -> com.android.settingslib.R.drawable.ic_headphone
             }
 
-        val chipText =
-            when {
-                info.batteryLevel != null -> "${info.batteryLevel}%"
-                info.leftBattery != null -> "${info.leftBattery}%"
-                else -> "Connected"
-            }
+        // No text on collapsed chip – device icon + connected icon only
+        val chipText: String? = null
 
         val popupModel =
             BluetoothAudioPopupModel(

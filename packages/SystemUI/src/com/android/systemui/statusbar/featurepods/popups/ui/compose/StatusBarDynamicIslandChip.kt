@@ -315,7 +315,7 @@ private fun UtilityStatusIslandChip(
             is PopupContentModel.Alarm -> 76.dp
             is PopupContentModel.Call -> 100.dp
             is PopupContentModel.RingerMode -> 80.dp
-            is PopupContentModel.BluetoothAudio -> 104.dp
+            is PopupContentModel.BluetoothAudio -> 48.dp
             else -> 88.dp
         } * widthScale
     val connectedIslandWidth =
@@ -346,7 +346,7 @@ private fun UtilityStatusIslandChip(
                     viewModel.chipText.orEmpty()
                 }
             is PopupContentModel.RingerMode -> popupContent.model.label
-            is PopupContentModel.BluetoothAudio -> viewModel.chipText.orEmpty()
+            is PopupContentModel.BluetoothAudio -> ""
             else -> ""
         }
 
@@ -399,6 +399,7 @@ private fun UtilityStatusIslandChip(
                 )
         }
         Spacer(modifier = Modifier.width(cutoutSpec.embeddedGapWidth))
+        val isBluetoothChip = viewModel.popupContent is PopupContentModel.BluetoothAudio
         Box(
             modifier =
                 Modifier.width(rightSegmentWidth)
@@ -410,18 +411,69 @@ private fun UtilityStatusIslandChip(
                     ),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            Text(
-                text = utilityText,
-                style = MaterialTheme.typography.labelLarge,
-                color = chipContentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.End,
-                softWrap = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (isBluetoothChip) {
+                AnimatedConnectedIcon(color = chipContentColor)
+            } else {
+                Text(
+                    text = utilityText,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = chipContentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                    softWrap = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         Spacer(modifier = Modifier.width(10.dp * widthScale))
+    }
+}
+
+@Composable
+private fun AnimatedConnectedIcon(
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val scale = remember { Animatable(0f) }
+    val iconAlpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec =
+                    spring(
+                        dampingRatio = 0.5f,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+            )
+        }
+        launch {
+            iconAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(250),
+            )
+        }
+    }
+
+    Box(
+        modifier =
+            modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                alpha = iconAlpha.value
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon = IconModel.Resource(
+                com.android.systemui.res.R.drawable.ic_bluetooth_connected,
+                null,
+            ),
+            modifier = Modifier.size(16.dp),
+            tint = Color(0xFF26E07F),
+        )
     }
 }
 

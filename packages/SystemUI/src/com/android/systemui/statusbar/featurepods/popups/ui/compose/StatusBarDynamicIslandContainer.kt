@@ -70,6 +70,9 @@ fun StatusBarDynamicIslandContainer(
     var popupVisible by remember { mutableStateOf(false) }
     var knownChipIds by remember { mutableStateOf<List<PopupChipId>>(emptyList()) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    // Keeps the last visible chip around so the exit animation can play out
+    var lastVisibleChip by remember { mutableStateOf<PopupChipModel.Shown?>(null) }
+    var isExitAnimating by remember { mutableStateOf(false) }
 
     LaunchedEffect(chips) {
         val currentChipIds = chips.map { it.chipId }
@@ -92,6 +95,20 @@ fun StatusBarDynamicIslandContainer(
 
     val selectedIndex = chips.indexOfFirst { it.chipId == selectedChipId }.coerceAtLeast(0)
     val selectedChip = chips.getOrNull(selectedIndex)
+
+    // Track the last visible chip for exit animation
+    LaunchedEffect(selectedChip) {
+        if (selectedChip != null) {
+            lastVisibleChip = selectedChip
+            isExitAnimating = false
+        } else if (lastVisibleChip != null) {
+            // Chip disappeared – keep lastVisibleChip alive for exit animation
+            isExitAnimating = true
+            delay(400)
+            lastVisibleChip = null
+            isExitAnimating = false
+        }
+    }
     val shownChip = chips.firstOrNull { it.isPopupShown }
 
     LaunchedEffect(shownChip) {
@@ -138,7 +155,7 @@ fun StatusBarDynamicIslandContainer(
         contentAlignment = Alignment.Center,
     ) {
         AnimatedVisibility(
-            visible = selectedChip != null,
+            visible = selectedChip != null || isExitAnimating,
             enter =
                 scaleIn(
                     initialScale = 0.35f,
@@ -161,7 +178,7 @@ fun StatusBarDynamicIslandContainer(
                 ) + fadeOut(animationSpec = tween(140)),
             modifier = Modifier.clip(RoundedCornerShape(50)),
         ) {
-            val currentChip = selectedChip ?: return@AnimatedVisibility
+            val currentChip = selectedChip ?: lastVisibleChip ?: return@AnimatedVisibility
 
             AnimatedContent(
                 targetState = currentChip.chipId,

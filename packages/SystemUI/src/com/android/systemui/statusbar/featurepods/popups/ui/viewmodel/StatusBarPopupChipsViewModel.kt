@@ -151,7 +151,14 @@ constructor(
                 )
             }
 
-        candidateChips.filterIsInstance<PopupChipModel.Shown>().map { chip ->
+        val shownChips = candidateChips.filterIsInstance<PopupChipModel.Shown>()
+        // Clear stale popup state if the chip it refers to is no longer shown
+        if (currentShownPopupChipId != null &&
+            shownChips.none { it.chipId == currentShownPopupChipId }
+        ) {
+            currentShownPopupChipId = null
+        }
+        shownChips.map { chip ->
             chip.copy(
                 isPopupShown = chip.chipId == currentShownPopupChipId,
                 showPopup = { currentShownPopupChipId = chip.chipId },
