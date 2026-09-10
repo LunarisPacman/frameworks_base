@@ -72,7 +72,6 @@ fun StatusBarDynamicIslandContainer(
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
     // Keeps the last visible chip around so the exit animation can play out
     var lastVisibleChip by remember { mutableStateOf<PopupChipModel.Shown?>(null) }
-    var isExitAnimating by remember { mutableStateOf(false) }
 
     LaunchedEffect(chips) {
         val currentChipIds = chips.map { it.chipId }
@@ -100,13 +99,11 @@ fun StatusBarDynamicIslandContainer(
     LaunchedEffect(selectedChip) {
         if (selectedChip != null) {
             lastVisibleChip = selectedChip
-            isExitAnimating = false
         } else if (lastVisibleChip != null) {
-            // Chip disappeared – keep lastVisibleChip alive for exit animation
-            isExitAnimating = true
-            delay(400)
-            lastVisibleChip = null
-            isExitAnimating = false
+            delay(300)
+            if (selectedChip == null) {
+                lastVisibleChip = null
+            }
         }
     }
     val shownChip = chips.firstOrNull { it.isPopupShown }
@@ -155,7 +152,7 @@ fun StatusBarDynamicIslandContainer(
         contentAlignment = Alignment.Center,
     ) {
         AnimatedVisibility(
-            visible = selectedChip != null || isExitAnimating,
+            visible = selectedChip != null,
             enter =
                 scaleIn(
                     initialScale = 0.35f,
@@ -216,7 +213,10 @@ fun StatusBarDynamicIslandContainer(
                 contentAlignment = Alignment.Center,
                 label = "dynamic_island_chip",
             ) { chipId ->
-                val chip = chips.firstOrNull { it.chipId == chipId } ?: return@AnimatedContent
+                val chip =
+                    chips.firstOrNull { it.chipId == chipId }
+                        ?: if (currentChip.chipId == chipId) currentChip else null
+                        ?: return@AnimatedContent
                 var horizontalDragPx by remember(chipId, chips.size) { mutableFloatStateOf(0f) }
                 val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
 
