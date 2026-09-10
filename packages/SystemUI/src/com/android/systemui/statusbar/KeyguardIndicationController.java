@@ -254,6 +254,7 @@ public class KeyguardIndicationController {
     private long mFullCapacityUah = -1;
     private int mCalibratedLevel = -1;
     private int mLevelStartCounterUah = -1;
+    private long mLevelStartTimeMs = -1;
     private double mLastFraction = 0.0;
     private Pair<String, BiometricSourceType> mBiometricErrorMessageToShowOnScreenOn;
     private Set<Integer> mCoExFaceAcquisitionMsgIdsToShow;
@@ -737,6 +738,25 @@ public class KeyguardIndicationController {
         });
     }
 
+    private final Runnable mChargingTickerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mPowerPluggedIn && mVisible && !mDozing) {
+                updateLockScreenBatteryMsg(false);
+                mHandler.postDelayed(this, 1000L);
+            }
+        }
+    };
+
+    private void updateChargingTicker() {
+        if (mHandler != null) {
+            mHandler.removeCallbacks(mChargingTickerRunnable);
+            if (mPowerPluggedIn && mVisible && !mDozing) {
+                mHandler.postDelayed(mChargingTickerRunnable, 1000L);
+            }
+        }
+    }
+
     private void updateLockScreenBatteryMsg(boolean animate) {
         if (mBatteryPresent && (mPowerPluggedIn || mEnableBatteryDefender)) {
             String powerIndication = computePowerIndication();
@@ -1035,6 +1055,7 @@ public class KeyguardIndicationController {
         } else {
             // If we unlock and return to keyguard quickly, previous error should not be shown
             hideTransientIndication();
+            updateChargingTicker();
         }
     }
 
@@ -1241,8 +1262,11 @@ public class KeyguardIndicationController {
     protected final void updateDeviceEntryIndication(boolean animate) {
         mKeyguardLogger.logUpdateDeviceEntryIndication(animate, mVisible, mDozing);
         if (!mVisible) {
+            updateChargingTicker();
             return;
         }
+
+        updateChargingTicker();
 
         // A few places might need to hide the indication, so always start by making it visible
         mIndicationArea.setVisibility(VISIBLE);
@@ -1416,70 +1440,98 @@ public class KeyguardIndicationController {
         if (mBatteryLevel >= 100) {
             return "100%";
         }
+        if (!mPowerPluggedIn) {
+            return NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+        }
 
         if (mBatteryManager == null) {
             mBatteryManager = mContext.getSystemService(BatteryManager.class);
         }
+
+        int chargeCounterUah = -1;
         if (mBatteryManager != null) {
-            int chargeCounterUah = mBatteryManager.getIntProperty(
+            chargeCounterUah = mBatteryManager.getIntProperty(
                     BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
-            if (chargeCounterUah > 0 && chargeCounterUah != Integer.MIN_VALUE) {
-                // 1. Try to obtain total capacity from sticky intent if not already cached
-                if (mFullCapacityUah <= 0) {
-                    Intent batteryIntent = mContext.registerReceiver(null,
-                            new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-                    if (batteryIntent != null) {
-                        int maxCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_MAXIMUM_CAPACITY, -1);
-                        int desCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_DESIGN_CAPACITY, -1);
-                        if (maxCap > 0) {
-                            mFullCapacityUah = maxCap;
-                        } else if (desCap > 0) {
-                            mFullCapacityUah = desCap;
-                        }
-                    }
+        }
+
+        // 1. Obtain total capacity if not already cached
+        if (mFullCapacityUah <= 0) {
+            Intent batteryIntent = mContext.registerReceiver(null,
+                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (batteryIntent != null) {
+                int maxCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_MAXIMUM_CAPACITY, -1);
+                int desCap = batteryIntent.getIntExtra(BatteryManager.EXTRA_DESIGN_CAPACITY, -1);
+                if (maxCap > 0) {
+                    mFullCapacityUah = maxCap;
+                } else if (desCap > 0) {
+                    mFullCapacityUah = desCap;
                 }
-
-                // 2. Try PowerProfile
-                if (mFullCapacityUah <= 0) {
-                    if (mPowerProfile == null) {
-                        mPowerProfile = new PowerProfile(mContext);
-                    }
-                    double capacityMah = mPowerProfile.getBatteryCapacity();
-                    if (capacityMah > 0) {
-                        mFullCapacityUah = (long) (capacityMah * 1000.0);
-                    }
+            }
+            if (mFullCapacityUah <= 0) {
+                if (mPowerProfile == null) {
+                    mPowerProfile = new PowerProfile(mContext);
                 }
-
-                double uahPerPercent = (mFullCapacityUah > 0)
-                        ? (mFullCapacityUah / 100.0)
-                        : 50000.0;
-
-                // When battery level steps up/down or on first calibration for this level:
-                if (mCalibratedLevel != mBatteryLevel || mLevelStartCounterUah <= 0) {
-                    mCalibratedLevel = mBatteryLevel;
-                    mLevelStartCounterUah = chargeCounterUah;
-                    mLastFraction = 0.0;
+                double capacityMah = mPowerProfile.getBatteryCapacity();
+                if (capacityMah > 0) {
+                    mFullCapacityUah = (long) (capacityMah * 1000.0);
                 }
-
-                // If chargeCounter jumped backwards significantly (e.g. gauge recalibration), reset baseline
-                if (chargeCounterUah < mLevelStartCounterUah) {
-                    mLevelStartCounterUah = chargeCounterUah;
-                    mLastFraction = 0.0;
-                }
-
-                int deltaUah = chargeCounterUah - mLevelStartCounterUah;
-                double fraction = deltaUah / uahPerPercent;
-                // Fraction within the current integer battery level [0.00, 0.99]
-                fraction = Math.max(0.0, Math.min(0.99, fraction));
-                if (fraction > mLastFraction) {
-                    mLastFraction = fraction;
-                }
-
-                double exact = mBatteryLevel + mLastFraction;
-                return String.format(Locale.US, "%.2f%%", exact);
             }
         }
-        return NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+
+        double uahPerPercent = (mFullCapacityUah > 0)
+                ? (mFullCapacityUah / 100.0)
+                : 50000.0;
+
+        long now = SystemClock.elapsedRealtime();
+        // When battery level steps up/down or on first calibration for this level:
+        if (mCalibratedLevel != mBatteryLevel || mLevelStartTimeMs <= 0) {
+            mCalibratedLevel = mBatteryLevel;
+            mLevelStartTimeMs = now;
+            mLevelStartCounterUah = (chargeCounterUah > 0 && chargeCounterUah != Integer.MIN_VALUE)
+                    ? chargeCounterUah : -1;
+            mLastFraction = 0.0;
+        }
+
+        // Determine fraction from hardware Coulomb counter if it increased
+        double fractionFromCounter = 0.0;
+        if (chargeCounterUah > 0 && chargeCounterUah != Integer.MIN_VALUE
+                && mLevelStartCounterUah > 0 && chargeCounterUah >= mLevelStartCounterUah) {
+            fractionFromCounter = (chargeCounterUah - mLevelStartCounterUah) / uahPerPercent;
+        }
+
+        // Determine fraction from charging current and elapsed time
+        double currentUa = 0.0;
+        if (mChargingCurrent > 0) {
+            int currentDivider = mCurrentDivider > 0 ? mCurrentDivider : 1;
+            currentUa = (mChargingCurrent / (float) currentDivider) * 1000.0;
+        }
+        if (currentUa <= 0 && mBatteryManager != null) {
+            int propCurrent = mBatteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+            if (propCurrent != Integer.MIN_VALUE && propCurrent != 0) {
+                currentUa = Math.abs(propCurrent);
+            }
+        }
+        if (currentUa <= 0 && mChargingWattage > 0) {
+            int currentDivider = mCurrentDivider > 0 ? mCurrentDivider : 1;
+            double wattage = mChargingWattage / (float) currentDivider / 1000.0;
+            currentUa = (wattage / 4.0) * 1000000.0;
+        }
+        if (currentUa <= 0) {
+            currentUa = 1500000.0; // fallback 1.5A
+        }
+
+        double elapsedSec = Math.max(0.0, (now - mLevelStartTimeMs) / 1000.0);
+        double chargeAddedUah = currentUa * (elapsedSec / 3600.0);
+        double fractionFromTime = chargeAddedUah / uahPerPercent;
+
+        double fraction = Math.max(fractionFromCounter, fractionFromTime);
+        fraction = Math.max(0.0, Math.min(0.99, fraction));
+        if (fraction > mLastFraction) {
+            mLastFraction = fraction;
+        }
+
+        double exact = mBatteryLevel + mLastFraction;
+        return String.format(Locale.US, "%.2f%%", exact);
     }
 
     protected String computePowerChargingStringIndication() {
@@ -1747,8 +1799,10 @@ public class KeyguardIndicationController {
             if (!mPowerPluggedIn) {
                 mCalibratedLevel = -1;
                 mLevelStartCounterUah = -1;
+                mLevelStartTimeMs = -1;
                 mLastFraction = 0.0;
             }
+            updateChargingTicker();
             if (ScrimUtils.get().isKeyguardShowing()) {
                 try {
                     if (mPowerPluggedIn) {
