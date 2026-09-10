@@ -252,8 +252,9 @@ public class KeyguardIndicationController {
     private BatteryManager mBatteryManager;
     private PowerProfile mPowerProfile;
     private long mFullCapacityUah = -1;
-    private long mEstimatedFullUah = -1;
     private int mCalibratedLevel = -1;
+    private int mLevelStartCounterUah = -1;
+    private double mLastFraction = 0.0;
     private Pair<String, BiometricSourceType> mBiometricErrorMessageToShowOnScreenOn;
     private Set<Integer> mCoExFaceAcquisitionMsgIdsToShow;
     private final FaceHelpMessageDeferral mFaceAcquiredMessageDeferral;
@@ -1409,6 +1410,13 @@ public class KeyguardIndicationController {
     }
 
     private String getDecimalBatteryPercentage() {
+        if (mBatteryLevel < 0) {
+            return "";
+        }
+        if (mBatteryLevel >= 100) {
+            return "100%";
+        }
+
         if (mBatteryManager == null) {
             mBatteryManager = mContext.getSystemService(BatteryManager.class);
         }
@@ -1442,25 +1450,33 @@ public class KeyguardIndicationController {
                     }
                 }
 
-                double exact = -1.0;
-                if (mFullCapacityUah > 0) {
-                    exact = (chargeCounterUah / (double) mFullCapacityUah) * 100.0;
-                } else if (mBatteryLevel > 0) {
-                    // 3. Fallback: lock in estimated full capacity once per battery level step
-                    // so chargeCounter increases the decimal value continuously.
-                    if (mEstimatedFullUah <= 0 || mCalibratedLevel != mBatteryLevel) {
-                        mEstimatedFullUah = (long) (chargeCounterUah / (mBatteryLevel / 100.0));
-                        mCalibratedLevel = mBatteryLevel;
-                    }
-                    if (mEstimatedFullUah > 0) {
-                        exact = (chargeCounterUah / (double) mEstimatedFullUah) * 100.0;
-                    }
+                double uahPerPercent = (mFullCapacityUah > 0)
+                        ? (mFullCapacityUah / 100.0)
+                        : 50000.0;
+
+                // When battery level steps up/down or on first calibration for this level:
+                if (mCalibratedLevel != mBatteryLevel || mLevelStartCounterUah <= 0) {
+                    mCalibratedLevel = mBatteryLevel;
+                    mLevelStartCounterUah = chargeCounterUah;
+                    mLastFraction = 0.0;
                 }
 
-                if (exact >= 0.0) {
-                    exact = Math.min(100.0, Math.max(0.0, exact));
-                    return String.format(Locale.US, "%.2f%%", exact);
+                // If chargeCounter jumped backwards significantly (e.g. gauge recalibration), reset baseline
+                if (chargeCounterUah < mLevelStartCounterUah) {
+                    mLevelStartCounterUah = chargeCounterUah;
+                    mLastFraction = 0.0;
                 }
+
+                int deltaUah = chargeCounterUah - mLevelStartCounterUah;
+                double fraction = deltaUah / uahPerPercent;
+                // Fraction within the current integer battery level [0.00, 0.99]
+                fraction = Math.max(0.0, Math.min(0.99, fraction));
+                if (fraction > mLastFraction) {
+                    mLastFraction = fraction;
+                }
+
+                double exact = mBatteryLevel + mLastFraction;
+                return String.format(Locale.US, "%.2f%%", exact);
             }
         }
         return NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
@@ -1728,6 +1744,11 @@ public class KeyguardIndicationController {
             // when the battery is overheated, device doesn't charge so only guard on pluggedIn:
             mEnableBatteryDefender = mBatteryDefender && status.isPluggedIn();
             mIncompatibleCharger = status.incompatibleCharger.orElse(false);
+            if (!mPowerPluggedIn) {
+                mCalibratedLevel = -1;
+                mLevelStartCounterUah = -1;
+                mLastFraction = 0.0;
+            }
             if (ScrimUtils.get().isKeyguardShowing()) {
                 try {
                     if (mPowerPluggedIn) {
