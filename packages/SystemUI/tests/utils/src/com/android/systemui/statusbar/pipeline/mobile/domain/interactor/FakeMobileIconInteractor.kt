@@ -76,6 +76,12 @@ class FakeMobileIconInteractor(override val tableLogBuffer: TableLogBuffer) : Mo
             )
         )
 
+    override val shouldShowFourgIcon = MutableStateFlow(false)
+
+    override val fiveGStyle = MutableStateFlow(0)
+
+    override val disableStackedMobileIcons = MutableStateFlow(false)
+
     fun setIsDataEnabled(enabled: Boolean) {
         _isDataEnabled.value = enabled
     }
