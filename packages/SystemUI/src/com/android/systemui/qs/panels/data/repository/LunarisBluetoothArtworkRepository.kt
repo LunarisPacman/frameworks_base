@@ -26,6 +26,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.util.Log
 import com.android.settingslib.bluetooth.CachedBluetoothDevice
+import com.android.systemui.bluetooth.LunarisKnownDeviceArtwork
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
@@ -55,7 +56,13 @@ constructor(
     @Main mainDispatcher: CoroutineDispatcher,
     @Background private val backgroundDispatcher: CoroutineDispatcher,
 ) {
-    private data class DeviceRequest(val device: BluetoothDevice?, val revision: Int)
+    private data class DeviceRequest(
+        val device: BluetoothDevice?,
+        val cachedDevice: CachedBluetoothDevice?,
+        val deviceName: String?,
+        val deviceAlias: String?,
+        val revision: Int,
+    )
 
     private val requests =
         conflatedCallbackFlow<DeviceRequest> {
@@ -68,7 +75,9 @@ constructor(
                         listening && device == observedDevice?.device &&
                             key == BluetoothDevice.METADATA_MAIN_ICON
                     ) {
-                        trySend(DeviceRequest(device, ++revision))
+                        val name = runCatching { device.name }.getOrNull()
+                        val alias = runCatching { device.alias }.getOrNull() ?: observedDevice?.name
+                        trySend(DeviceRequest(device, observedDevice, name, alias, ++revision))
                     }
                 }
 
@@ -101,7 +110,10 @@ constructor(
                         }
                     }
                 }
-                trySend(DeviceRequest(device?.device, revision))
+                val btDevice = device?.device
+                val name = runCatching { btDevice?.name }.getOrNull()
+                val alias = runCatching { btDevice?.alias }.getOrNull() ?: device?.name
+                trySend(DeviceRequest(btDevice, device, name, alias, revision))
             }
 
             val callback =
@@ -135,11 +147,22 @@ constructor(
             }
             .flowOn(backgroundDispatcher)
             .distinctUntilChanged()
-            .transformLatest<Pair<DeviceRequest, Uri?>, Drawable?> { (_, uri) ->
+            .transformLatest<Pair<DeviceRequest, Uri?>, Drawable?> { (request, uri) ->
                 emit(null)
+                var drawable: Drawable? = null
                 if (uri != null) {
-                    emit(withContext(backgroundDispatcher) { loadArtwork(uri) })
+                    drawable = withContext(backgroundDispatcher) { loadArtwork(uri) }
                 }
+                if (drawable == null && request.device != null) {
+                    drawable = withContext(backgroundDispatcher) {
+                        LunarisKnownDeviceArtwork.getArtwork(
+                            context,
+                            request.device,
+                            request.cachedDevice,
+                        )
+                    }
+                }
+                emit(drawable)
             }
             .stateIn(
                 applicationScope,

@@ -8,6 +8,7 @@ import android.graphics.ImageDecoder
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.util.Log
+import com.android.systemui.bluetooth.LunarisKnownDeviceArtwork
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.islandevents.model.IslandEvent
@@ -215,7 +216,20 @@ constructor(
         imageJob?.cancel()
         imageUri = uri
         _bluetoothEvent.value = _bluetoothEvent.value?.copy(deviceImage = null)
-        if (uri == null) return
+        if (uri == null) {
+            val fallback = LunarisKnownDeviceArtwork.getArtwork(context, device)
+            val current = _bluetoothEvent.value
+            if (
+                fallback != null &&
+                    btListening &&
+                    imageDevice == device &&
+                    current != null &&
+                    current.address == device.address
+            ) {
+                _bluetoothEvent.value = current.copy(deviceImage = fallback)
+            }
+            return
+        }
         imageJob =
             applicationScope.launch(Dispatchers.Main.immediate) {
                 val artwork =
@@ -237,7 +251,7 @@ constructor(
                             BitmapDrawable(context.resources, bitmap)
                         } catch (e: Exception) {
                             Log.w(TAG, "Unable to load Bluetooth device artwork", e)
-                            null
+                            LunarisKnownDeviceArtwork.getArtwork(context, device)
                         }
                     }
                 val current = _bluetoothEvent.value
