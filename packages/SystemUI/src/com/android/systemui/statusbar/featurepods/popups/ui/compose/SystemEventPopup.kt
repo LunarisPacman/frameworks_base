@@ -58,6 +58,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,12 +67,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -85,6 +89,7 @@ import com.android.systemui.statusbar.featurepods.popups.ui.model.BluetoothBatte
 import com.android.systemui.statusbar.featurepods.popups.ui.model.BluetoothBatteryModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.ChargingDetailModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupContentModel
+import com.android.systemui.statusbar.featurepods.popups.shared.model.PopupActionModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.SystemEventKind
 
 @Composable
@@ -187,8 +192,18 @@ fun SystemEventPopup(
         if (model.kind == SystemEventKind.Charging && model.chargingDetails.isNotEmpty()) {
             LunarisBarChargingDetails(model.chargingDetails)
         }
-        model.reply?.let { reply ->
-            var replyText by remember(reply) { mutableStateOf("") }
+        val reply = model.reply
+        var replyExpanded by remember(reply) { mutableStateOf(false) }
+        var replyText by remember(reply) { mutableStateOf("") }
+        val focusRequester = remember(reply) { FocusRequester() }
+        val keyboardController = LocalSoftwareKeyboardController.current
+        LaunchedEffect(replyExpanded) {
+            if (replyExpanded) {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            }
+        }
+        if (replyExpanded && reply != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -197,21 +212,43 @@ fun SystemEventPopup(
                 OutlinedTextField(
                     value = replyText,
                     onValueChange = { replyText = it },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
                     label = { Text(stringResource(R.string.lunaris_bar_reply)) },
                     singleLine = true,
                 )
                 Button(
-                    onClick = { if (reply.submit(replyText)) replyText = "" },
+                    onClick = {
+                        if (reply.submit(replyText)) {
+                            replyText = ""
+                            replyExpanded = false
+                            keyboardController?.hide()
+                        }
+                    },
                     enabled = replyText.isNotBlank(),
                     modifier = Modifier.heightIn(min = 48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = stringResource(R.string.lunaris_bar_send_reply))
+                    Icon(
+                        Icons.Default.Send,
+                        contentDescription = stringResource(R.string.lunaris_bar_send_reply),
+                    )
                 }
             }
         }
-        PopupActionChips(model.actions, colors.accent)
+        val popupActions =
+            when {
+                reply == null -> model.actions
+                replyExpanded ->
+                    listOf(
+                        PopupActionModel(stringResource(android.R.string.cancel)) {
+                            replyExpanded = false
+                            replyText = ""
+                            keyboardController?.hide()
+                        }
+                    ) + model.actions
+                else -> listOf(PopupActionModel(reply.label) { replyExpanded = true }) + model.actions
+            }
+        PopupActionChips(popupActions, colors.accent)
     }
 }
 
