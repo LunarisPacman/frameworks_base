@@ -244,19 +244,25 @@ fun SystemEventPopup(
                 reply == null -> model.actions
                 replyExpanded ->
                     listOf(
-                        PopupActionModel(stringResource(android.R.string.cancel)) {
-                            replyExpanded = false
-                            onReplyInputExpanded(false)
-                            replyText = ""
-                            keyboardController?.hide()
-                        }
+                        PopupActionModel(
+                            label = stringResource(android.R.string.cancel),
+                            onClick = {
+                                replyExpanded = false
+                                onReplyInputExpanded(false)
+                                replyText = ""
+                                keyboardController?.hide()
+                            },
+                        )
                     ) + model.actions
                 else ->
                     listOf(
-                        PopupActionModel(reply.label) {
-                            replyExpanded = true
-                            onReplyInputExpanded(true)
-                        }
+                        PopupActionModel(
+                            label = reply.label,
+                            onClick = {
+                                replyExpanded = true
+                                onReplyInputExpanded(true)
+                            },
+                        )
                     ) + model.actions
             }
         PopupActionChips(popupActions, colors.accent)
