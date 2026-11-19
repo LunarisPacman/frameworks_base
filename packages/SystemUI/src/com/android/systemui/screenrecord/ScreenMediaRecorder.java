@@ -346,31 +346,42 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             throws IOException {
         String videoType = mHEVC ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
 
-        // Get max size from the decoder, to ensure recordings will be playable on device
-        MediaCodec decoder = MediaCodec.createDecoderByType(videoType);
-        MediaCodecInfo.VideoCapabilities vc = decoder.getCodecInfo()
-                .getCapabilitiesForType(videoType).getVideoCapabilities();
-        decoder.release();
+        // Keep the selected size and rate within both encoder and decoder capabilities.
+        MediaCodec encoder = null;
+        MediaCodec decoder = null;
+        MediaCodecInfo.VideoCapabilities encoderVc;
+        MediaCodecInfo.VideoCapabilities decoderVc;
+        try {
+            encoder = MediaCodec.createEncoderByType(videoType);
+            decoder = MediaCodec.createDecoderByType(videoType);
+            encoderVc = encoder.getCodecInfo().getCapabilitiesForType(videoType)
+                    .getVideoCapabilities();
+            decoderVc = decoder.getCodecInfo().getCapabilitiesForType(videoType)
+                    .getVideoCapabilities();
+        } finally {
+            if (encoder != null) encoder.release();
+            if (decoder != null) decoder.release();
+        }
 
         // Check if we can support screen size as-is
-        int width = vc.getSupportedWidths().getUpper();
-        int height = vc.getSupportedHeights().getUpper();
+        int widthAlignment = lcm(encoderVc.getWidthAlignment(), decoderVc.getWidthAlignment());
+        int heightAlignment = lcm(encoderVc.getHeightAlignment(), decoderVc.getHeightAlignment());
+        int width = alignDown(Math.min(encoderVc.getSupportedWidths().getUpper(),
+                decoderVc.getSupportedWidths().getUpper()), widthAlignment);
+        int height = alignDown(Math.min(encoderVc.getSupportedHeights().getUpper(),
+                decoderVc.getSupportedHeights().getUpper()), heightAlignment);
 
-        int screenWidthAligned = screenWidth;
-        if (screenWidthAligned % vc.getWidthAlignment() != 0) {
-            screenWidthAligned -= (screenWidthAligned % vc.getWidthAlignment());
-        }
-        int screenHeightAligned = screenHeight;
-        if (screenHeightAligned % vc.getHeightAlignment() != 0) {
-            screenHeightAligned -= (screenHeightAligned % vc.getHeightAlignment());
-        }
+        int screenWidthAligned = alignDown(screenWidth, widthAlignment);
+        int screenHeightAligned = alignDown(screenHeight, heightAlignment);
 
         if (width >= screenWidthAligned && height >= screenHeightAligned
-                && vc.isSizeSupported(screenWidthAligned, screenHeightAligned)) {
+                && encoderVc.isSizeSupported(screenWidthAligned, screenHeightAligned)
+                && decoderVc.isSizeSupported(screenWidthAligned, screenHeightAligned)) {
             // Desired size is supported, now get the rate
             int[] dimens =
                     adjustSizeForFrameRate(
-                            vc,
+                            encoderVc,
+                            decoderVc,
                             screenWidth,
                             screenHeight,
                             screenWidthAligned,
@@ -384,55 +395,57 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         double scale = Math.min(((double) width / screenWidth),
                 ((double) height / screenHeight));
 
-        int scaledWidth = (int) (screenWidth * scale);
-        int scaledHeight = (int) (screenHeight * scale);
-        if (scaledWidth % vc.getWidthAlignment() != 0) {
-            scaledWidth -= (scaledWidth % vc.getWidthAlignment());
-        }
-        if (scaledHeight % vc.getHeightAlignment() != 0) {
-            scaledHeight -= (scaledHeight % vc.getHeightAlignment());
-        }
+        int scaledWidth = alignDown((int) (screenWidth * scale), widthAlignment);
+        int scaledHeight = alignDown((int) (screenHeight * scale), heightAlignment);
 
         // Find max supported rate for size
         int[] dimens =
                 adjustSizeForFrameRate(
-                        vc, screenWidth, screenHeight, scaledWidth, scaledHeight, refreshRate);
+                        encoderVc, decoderVc, screenWidth, screenHeight, scaledWidth, scaledHeight,
+                        refreshRate);
 
         Log.d(TAG, "Resized by " + scale + ": " + dimens[0] + ", " + dimens[1] + ", " + dimens[2]);
         return dimens;
     }
 
     private int[] adjustSizeForFrameRate(
-            MediaCodecInfo.VideoCapabilities videoCapabilities,
+            MediaCodecInfo.VideoCapabilities encoderCapabilities,
+            MediaCodecInfo.VideoCapabilities decoderCapabilities,
             int screenWidth,
             int screenHeight,
             int maxWidth,
             int maxHeight,
             int frameRate) {
-        int maxRate =
-                videoCapabilities
-                        .getSupportedFrameRatesFor(maxWidth, maxHeight)
-                        .getUpper()
-                        .intValue();
+        int maxRate = Math.min(
+                encoderCapabilities.getSupportedFrameRatesFor(maxWidth, maxHeight)
+                        .getUpper().intValue(),
+                decoderCapabilities.getSupportedFrameRatesFor(maxWidth, maxHeight)
+                        .getUpper().intValue());
         if (maxRate >= frameRate || mRequestedFps == 0) {
             return new int[] {maxWidth, maxHeight, Math.min(maxRate, frameRate)};
         }
 
-        int widthAlignment = videoCapabilities.getWidthAlignment();
-        int heightAlignment = videoCapabilities.getHeightAlignment();
-        int minWidth = videoCapabilities.getSupportedWidths().getLower();
-        int minHeight = videoCapabilities.getSupportedHeights().getLower();
+        int widthAlignment = lcm(encoderCapabilities.getWidthAlignment(),
+                decoderCapabilities.getWidthAlignment());
+        int heightAlignment = lcm(encoderCapabilities.getHeightAlignment(),
+                decoderCapabilities.getHeightAlignment());
+        int minWidth = Math.max(encoderCapabilities.getSupportedWidths().getLower(),
+                decoderCapabilities.getSupportedWidths().getLower());
+        int minHeight = Math.max(encoderCapabilities.getSupportedHeights().getLower(),
+                decoderCapabilities.getSupportedHeights().getLower());
 
-        for (int height = maxHeight; height >= minHeight; height -= heightAlignment) {
+        for (int height = alignDown(maxHeight, heightAlignment); height >= minHeight;
+                height -= heightAlignment) {
             int width = (int) ((long) screenWidth * height / screenHeight);
-            width -= width % widthAlignment;
+            width = alignDown(width, widthAlignment);
             if (width > maxWidth) {
                 continue;
             }
             if (width < minWidth) {
                 break;
             }
-            if (videoCapabilities.areSizeAndRateSupported(width, height, frameRate)) {
+            if (encoderCapabilities.areSizeAndRateSupported(width, height, frameRate)
+                    && decoderCapabilities.areSizeAndRateSupported(width, height, frameRate)) {
                 Log.d(
                         TAG,
                         "Resized for requested rate " + frameRate + ": " + width + ", " + height);
@@ -440,6 +453,21 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             }
         }
         return new int[] {maxWidth, maxHeight, maxRate};
+    }
+
+    private static int alignDown(int value, int alignment) {
+        return value - value % alignment;
+    }
+
+    private static int lcm(int first, int second) {
+        int a = first;
+        int b = second;
+        while (b != 0) {
+            int remainder = a % b;
+            a = b;
+            b = remainder;
+        }
+        return first / a * second;
     }
 
     /**
