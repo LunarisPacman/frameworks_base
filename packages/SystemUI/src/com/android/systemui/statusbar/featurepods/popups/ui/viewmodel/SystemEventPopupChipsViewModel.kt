@@ -271,7 +271,15 @@ constructor(
                                         connectivity::disconnectBluetooth,
                                         system::setRingerMode,
                                         notificationCount =
-                                            events.count { it is IslandEvent.Notification },
+                                            if (event is IslandEvent.Notification) {
+                                                events.count {
+                                                    it is IslandEvent.Notification &&
+                                                        it.sbn.packageName ==
+                                                            event.sbn.packageName &&
+                                                        it.sbn.userId ==
+                                                            event.sbn.userId
+                                                }
+                                            } else 0,
                                         chargingDetails = details,
                                     )
                                     ?.let { chip ->
