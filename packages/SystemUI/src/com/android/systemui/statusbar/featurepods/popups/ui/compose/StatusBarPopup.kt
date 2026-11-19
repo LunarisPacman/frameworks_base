@@ -110,6 +110,7 @@ private fun LunarisBarPopupWindow(
     val density = LocalDensity.current
     val settings = LocalLunarisBarState.current.settings
     val notification = viewModel.popupContent.isNotificationPopup
+    var notificationReplyExpanded by remember(viewModel.chipId) { mutableStateOf(false) }
     val currentNotification by rememberUpdatedState(notification)
     val topInsetPx =
         with(density) {
@@ -134,8 +135,9 @@ private fun LunarisBarPopupWindow(
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                         if (notification) {
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                                if (notificationReplyExpanded) 0
+                                else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         } else {
                             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
                                 WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
@@ -337,7 +339,9 @@ private fun LunarisBarPopupWindow(
                         },
                         label = "island_popup_pager",
                     ) { chip ->
-                        IslandPopupContent(chip)
+                        IslandPopupContent(chip) { expanded ->
+                            notificationReplyExpanded = expanded
+                        }
                     }
                 }
             }
@@ -347,7 +351,10 @@ private fun LunarisBarPopupWindow(
 
 /** Renders the per-feature card for [viewModel]; the swipe pager slides between these. */
 @Composable
-private fun IslandPopupContent(viewModel: PopupChipModel.Shown) {
+private fun IslandPopupContent(
+    viewModel: PopupChipModel.Shown,
+    onReplyInputExpanded: (Boolean) -> Unit = {},
+) {
     when (val popupContent = viewModel.popupContent) {
         is PopupContentModel.Utility ->
             LunarisBarUtilityCard(popupContent.card, viewModel.hidePopup)
@@ -383,6 +390,7 @@ private fun IslandPopupContent(viewModel: PopupChipModel.Shown) {
         is PopupContentModel.SystemEvent ->
             SystemEventPopup(
                 model = popupContent,
+                onReplyInputExpanded = onReplyInputExpanded,
                 onDismissNotification = {
                     viewModel.hidePopup()
                     viewModel.dismissNotification?.invoke()

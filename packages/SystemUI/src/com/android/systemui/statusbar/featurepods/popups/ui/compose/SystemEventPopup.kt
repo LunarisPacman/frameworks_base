@@ -64,6 +64,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,6 +98,7 @@ fun SystemEventPopup(
     model: PopupContentModel.SystemEvent,
     modifier: Modifier = Modifier,
     onDismissNotification: () -> Unit = {},
+    onReplyInputExpanded: (Boolean) -> Unit = {},
 ) {
     if (model.kind == SystemEventKind.Call) {
         CallPopup(model, modifier, onDismissNotification)
@@ -199,6 +201,7 @@ fun SystemEventPopup(
         val keyboardController = LocalSoftwareKeyboardController.current
         LaunchedEffect(replyExpanded) {
             if (replyExpanded) {
+                withFrameNanos { }
                 focusRequester.requestFocus()
                 keyboardController?.show()
             }
@@ -221,6 +224,7 @@ fun SystemEventPopup(
                         if (reply.submit(replyText)) {
                             replyText = ""
                             replyExpanded = false
+                            onReplyInputExpanded(false)
                             keyboardController?.hide()
                         }
                     },
@@ -242,11 +246,18 @@ fun SystemEventPopup(
                     listOf(
                         PopupActionModel(stringResource(android.R.string.cancel)) {
                             replyExpanded = false
+                            onReplyInputExpanded(false)
                             replyText = ""
                             keyboardController?.hide()
                         }
                     ) + model.actions
-                else -> listOf(PopupActionModel(reply.label) { replyExpanded = true }) + model.actions
+                else ->
+                    listOf(
+                        PopupActionModel(reply.label) {
+                            replyExpanded = true
+                            onReplyInputExpanded(true)
+                        }
+                    ) + model.actions
             }
         PopupActionChips(popupActions, colors.accent)
     }
