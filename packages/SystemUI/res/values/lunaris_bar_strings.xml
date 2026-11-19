@@ -22,6 +22,7 @@
     <string name="lunaris_bar_end_call">End call</string>
     <string name="lunaris_bar_reply">Reply</string>
     <string name="lunaris_bar_send_reply">Send reply</string>
+    <string name="lunaris_bar_notification_count_a11y">Notifications, %1$d</string>
     <string name="lunaris_bar_swipe_dismiss">Swipe to dismiss</string>
     <string name="lunaris_bar_night_colors">Edit dark theme colors</string>
     <string name="lunaris_bar_palette_day">Light theme palette</string>
