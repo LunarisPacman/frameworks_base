@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VpnLock
@@ -52,9 +53,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -179,6 +186,30 @@ fun SystemEventPopup(
         }
         if (model.kind == SystemEventKind.Charging && model.chargingDetails.isNotEmpty()) {
             LunarisBarChargingDetails(model.chargingDetails)
+        }
+        model.reply?.let { reply ->
+            var replyText by remember(reply) { mutableStateOf("") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = replyText,
+                    onValueChange = { replyText = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.lunaris_bar_reply)) },
+                    singleLine = true,
+                )
+                Button(
+                    onClick = { if (reply.submit(replyText)) replyText = "" },
+                    enabled = replyText.isNotBlank(),
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = stringResource(R.string.lunaris_bar_send_reply))
+                }
+            }
         }
         PopupActionChips(model.actions, colors.accent)
     }
