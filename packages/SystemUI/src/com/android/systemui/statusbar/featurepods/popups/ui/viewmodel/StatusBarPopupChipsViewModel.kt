@@ -33,6 +33,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.lifecycle.ExclusiveActivatable
+import com.android.systemui.res.R
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.statusbar.featurepods.alarm.ui.viewmodel.AlarmPopupChipViewModel
@@ -249,7 +250,13 @@ constructor(
                             chip.popupContent.isNotificationPopup
                     ) {
                         chip.copy(
-                            contentDescription = null,
+                            contentDescription =
+                                chip.notificationCount?.let {
+                                    context.getString(
+                                        R.string.lunaris_bar_notification_count_a11y,
+                                        it,
+                                    )
+                                },
                             chipText = chip.notificationCount?.toString() ?: chip.chipText,
                             popupContent = PopupContentModel.None,
                             isPopupShown = false,
