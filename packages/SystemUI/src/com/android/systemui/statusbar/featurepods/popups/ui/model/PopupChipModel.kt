@@ -80,6 +80,9 @@ data class BluetoothBatteryModel(
 
 data class ChargingDetailModel(val label: String, val value: String, val unit: String)
 
+/** Direct reply action exposed by a notification popup. */
+data class NotificationReplyModel(val label: String, val submit: (String) -> Boolean)
+
 /** Rich popup contents associated with a status bar chip. */
 sealed interface PopupContentModel {
     data class Utility(val card: LunarisBarSettings.Card) : PopupContentModel
@@ -106,6 +109,7 @@ sealed interface PopupContentModel {
         val bluetoothBatteries: List<BluetoothBatteryModel> = emptyList(),
         val chargingDetails: List<ChargingDetailModel> = emptyList(),
         val appIcon: Icon? = null,
+        val reply: NotificationReplyModel? = null,
     ) : PopupContentModel
 
     data object None : PopupContentModel
