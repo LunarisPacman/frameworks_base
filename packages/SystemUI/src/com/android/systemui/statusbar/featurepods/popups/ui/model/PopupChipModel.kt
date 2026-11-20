@@ -174,6 +174,7 @@ sealed class PopupChipModel {
         val dismissNotification: (() -> Unit)? = null,
         /** Number of active notifications from the app represented by this chip. */
         val notificationCount: Int? = null,
+        val onNotificationPopupTouchChanged: (Boolean) -> Unit = {},
     ) : PopupChipModel() {
         override val logName = "Shown(id=$chipId, toggled=$isPopupShown)"
     }
