@@ -51,6 +51,7 @@ import android.os.ServiceManager;
 import android.provider.MediaStore;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Range;
 import android.util.Size;
 import android.view.Display;
 import android.view.Surface;
@@ -253,6 +254,8 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         int resRatio = mLowQuality ? LOW_VIDEO_FRAME_RATE_TO_RESOLUTION_RATIO
                 : VIDEO_FRAME_RATE_TO_RESOLUTION_RATIO;
         int vidBitRate = (int) (width * height * refreshRate / VIDEO_FRAME_RATE * resRatio * mBitrateMultiplier);
+        Log.d(TAG, "Configured " + width + "x" + height + " at " + refreshRate + " fps, "
+                + vidBitRate + " bps (requested fps: " + mRequestedFps + ")");
         long maxFilesize = mFileSizeBytes > 0 ? mFileSizeBytes
                 : (mLongerDuration ? MAX_FILESIZE_BYTES_LONGER : MAX_FILESIZE_BYTES);
         if (!mHEVC) {
@@ -421,7 +424,10 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
                         .getUpper().intValue(),
                 decoderCapabilities.getSupportedFrameRatesFor(maxWidth, maxHeight)
                         .getUpper().intValue());
-        if (maxRate >= frameRate || mRequestedFps == 0) {
+        Range<Double> estimatedRates = mRequestedFps > 60 && frameRate > 60
+                ? encoderCapabilities.getAchievableFrameRatesFor(maxWidth, maxHeight) : null;
+        if (mRequestedFps == 0 || (maxRate >= frameRate
+                && (estimatedRates == null || estimatedRates.getUpper() >= frameRate))) {
             return new int[] {maxWidth, maxHeight, Math.min(maxRate, frameRate)};
         }
 
@@ -446,13 +452,20 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             }
             if (encoderCapabilities.areSizeAndRateSupported(width, height, frameRate)
                     && decoderCapabilities.areSizeAndRateSupported(width, height, frameRate)) {
+                if (estimatedRates != null && encoderCapabilities
+                        .getAchievableFrameRatesFor(width, height).getUpper() < frameRate) {
+                    continue;
+                }
                 Log.d(
                         TAG,
                         "Resized for requested rate " + frameRate + ": " + width + ", " + height);
                 return new int[] {width, height, frameRate};
             }
         }
-        return new int[] {maxWidth, maxHeight, maxRate};
+        // If the estimates don't back a high frame rate at any size, keep the selected size at
+        // up to 60 fps. Skip this fallback for codecs without benchmark data.
+        return new int[] {maxWidth, maxHeight,
+                estimatedRates == null ? maxRate : Math.min(maxRate, 60)};
     }
 
     private static int alignDown(int value, int alignment) {
