@@ -322,6 +322,12 @@ class NotificationSwipeHelper extends SwipeHelper implements NotificationSwipeAc
     protected void prepareDismissAnimation(View view, Animator anim) {
         super.prepareDismissAnimation(view, anim);
 
+        if (!mIsExpanded && getSwipedView() == view && ValueAnimator.areAnimatorsEnabled()
+                && view instanceof ExpandableNotificationRow row && row.isPinned()
+                && row.isHardwareAccelerated() && anim instanceof ValueAnimator swipeAnimator) {
+            row.addHeadsUpSwipeEffect(swipeAnimator);
+        }
+
         if (view instanceof ExpandableNotificationRow
                 && mNotificationRoundnessManager.isClearAllInProgress()) {
             ExpandableNotificationRow row = (ExpandableNotificationRow) view;

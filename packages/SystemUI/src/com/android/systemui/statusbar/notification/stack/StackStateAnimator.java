@@ -74,6 +74,8 @@ public class StackStateAnimator {
     public static final int ANIMATION_DELAY_PER_ELEMENT_GO_TO_FULL_SHADE = 48;
     public static final int DELAY_EFFECT_MAX_INDEX_DIFFERENCE = 2;
     private static final int MAX_STAGGER_COUNT = 5;
+    private static final int ANIMATION_DURATION_HEADS_UP_REVEAL = 330;
+    private static final int ANIMATION_DURATION_HEADS_UP_RETURN = 260;
 
     @VisibleForTesting
     int mGoToFullShadeAppearingTranslation;
@@ -561,15 +563,6 @@ public class StackStateAnimator {
             } else if (event.animationType == ANIMATION_TYPE_HEADS_UP_APPEAR) {
                 mHeadsUpAppearChildren.add(changingView);
 
-                mTmpState.copyFrom(changingView.getViewState());
-                mTmpState.setYTranslation(
-                        getHeadsUpYTranslationStart(
-                                event.headsUpFromBottom, event.headsUpHasStatusBarChip));
-                // set the height and the initial position
-                mTmpState.applyToView(changingView);
-                mAnimationProperties.setCustomInterpolator(View.TRANSLATION_Y,
-                        Interpolators.FAST_OUT_SLOW_IN);
-
                 Runnable onAnimationEnd = null;
                 if (loggable) {
                     // This only captures HEADS_UP_APPEAR animations, but HUNs can appear with
@@ -578,8 +571,25 @@ public class StackStateAnimator {
                     mLogger.logHUNViewAppearing(key);
                     onAnimationEnd = () -> mLogger.appearAnimationEnded(finalKey);
                 }
-                changingView.performAddAnimation(0, ANIMATION_DURATION_HEADS_UP_APPEAR,
-                        /* isHeadsUpAppear= */ true, /* isHeadsUpCycling= */ false, onAnimationEnd);
+                if (changingView instanceof ExpandableNotificationRow row && row.isPinned()
+                        && canUseHeadsUpCutoutAnimation(event, row)
+                        && row.getViewState().height > 0) {
+                    row.getViewState().applyToView(row);
+                    row.performHeadsUpRevealAnimation(mHeadsUpAnimator.getHeadsUpCutoutOrigin(row),
+                            ANIMATION_DURATION_HEADS_UP_REVEAL, onAnimationEnd,
+                            getGlobalAnimationFinishedListener());
+                    needsCustomAnimation = true;
+                } else {
+                    mTmpState.copyFrom(changingView.getViewState());
+                    mTmpState.setYTranslation(getHeadsUpYTranslationStart(
+                            event.headsUpFromBottom, event.headsUpHasStatusBarChip));
+                    mTmpState.applyToView(changingView);
+                    mAnimationProperties.setCustomInterpolator(View.TRANSLATION_Y,
+                            Interpolators.FAST_OUT_SLOW_IN);
+                    changingView.performAddAnimation(0, ANIMATION_DURATION_HEADS_UP_APPEAR,
+                            /* isHeadsUpAppear= */ true, /* isHeadsUpCycling= */ false,
+                            onAnimationEnd);
+                }
             } else if (event.animationType == ANIMATION_TYPE_HEADS_UP_CYCLING_OUT) {
                 mHeadsUpDisappearChildren.add(changingView);
                 Runnable endRunnable = null;
@@ -694,6 +704,17 @@ public class StackStateAnimator {
                     // We need to add the global animation listener, since once no animations are
                     // running anymore, the panel will instantly hide itself. We need to wait until
                     // the animation is fully finished for this though.
+                    final ExpandableNotificationRow returningRow =
+                            event.animationType == ANIMATION_TYPE_HEADS_UP_DISAPPEAR
+                                    && !mShadeExpanded
+                                    && changingView instanceof ExpandableNotificationRow row
+                                    && row.didHeadsUpTimeOut() && row.isHeadsUpAnimatingAway()
+                                    && !row.showingPulsing() && !ViewState.isAnimatingY(row)
+                                    && !row.isDrawingAppearAnimation()
+                                    && row.getVisibility() == View.VISIBLE
+                                    && row.getActualHeight() > 0
+                                    && canUseHeadsUpCutoutAnimation(event, row)
+                                    ? row : null;
                     final Runnable tmpEndRunnable = endRunnable;
                     final Runnable logAnimationStart;
                     final Runnable logAnimationEnd;
@@ -724,6 +745,14 @@ public class StackStateAnimator {
                             logAnimationEnd.run();
                         }
                         changingView.setInRemovalAnimation(false);
+                        if (returningRow != null) {
+                            // Hide the collapsed heads-up row before its draw transform resets.
+                            // The next stack update will lay it out as a regular notification.
+                            if (!mShadeExpanded && !returningRow.isHeadsUp()) {
+                                returningRow.setVisibility(View.INVISIBLE);
+                            }
+                            mHostLayout.requestChildrenUpdate();
+                        }
                         if (physicalNotificationMovement()) {
                             // Finish any running animations, in case the content disappear
                             // animation would finish earlier.
@@ -735,19 +764,28 @@ public class StackStateAnimator {
                         }
                     };
 
-                    long removeAnimationDelay = changingView.performRemoveAnimation(
-                            ANIMATION_DURATION_HEADS_UP_DISAPPEAR,
-                            0, 0.0f, true /* isHeadsUpAppear */,
-                            false /* isHeadsUpCycling */,
-                            startAnimation, postAnimation,
-                            getGlobalAnimationFinishedListener(), ExpandableView.ClipSide.BOTTOM);
-                    mAnimationProperties.delay += removeAnimationDelay;
-                    mAnimationProperties.duration = ANIMATION_DURATION_HEADS_UP_DISAPPEAR;
-                    mAnimationProperties.setCustomInterpolator(View.TRANSLATION_Y,
-                            Interpolators.FAST_OUT_SLOW_IN_REVERSE);
-                    mAnimationProperties.getAnimationFilter().animateY = true;
-                    mTmpState.animateTo(changingView, mAnimationProperties);
-                    mAnimationProperties.resetCustomInterpolators();
+                    if (returningRow != null) {
+                        // The draw transform owns the motion until the return finishes.
+                        returningRow.getViewState().setYTranslation(returningRow.getTranslationY());
+                        returningRow.performHeadsUpReturnAnimation(
+                                mHeadsUpAnimator.getHeadsUpCutoutOrigin(returningRow),
+                                ANIMATION_DURATION_HEADS_UP_RETURN, startAnimation, postAnimation,
+                                getGlobalAnimationFinishedListener());
+                    } else {
+                        long removeAnimationDelay = changingView.performRemoveAnimation(
+                                ANIMATION_DURATION_HEADS_UP_DISAPPEAR,
+                                0, 0.0f, true /* isHeadsUpAppear */,
+                                false /* isHeadsUpCycling */,
+                                startAnimation, postAnimation, getGlobalAnimationFinishedListener(),
+                                ExpandableView.ClipSide.BOTTOM);
+                        mAnimationProperties.delay += removeAnimationDelay;
+                        mAnimationProperties.duration = ANIMATION_DURATION_HEADS_UP_DISAPPEAR;
+                        mAnimationProperties.setCustomInterpolator(View.TRANSLATION_Y,
+                                Interpolators.FAST_OUT_SLOW_IN_REVERSE);
+                        mAnimationProperties.getAnimationFilter().animateY = true;
+                        mTmpState.animateTo(changingView, mAnimationProperties);
+                        mAnimationProperties.resetCustomInterpolators();
+                    }
                 } else if (endRunnable != null) {
                     endRunnable.run();
                 }
@@ -756,6 +794,13 @@ public class StackStateAnimator {
             mNewEvents.add(event);
         }
         return needsCustomAnimation;
+    }
+
+    private boolean canUseHeadsUpCutoutAnimation(
+            NotificationStackScrollLayout.AnimationEvent event, ExpandableNotificationRow row) {
+        return !event.headsUpFromBottom && !event.headsUpHasStatusBarChip
+                && mHeadsUpAnimator != null && ValueAnimator.areAnimatorsEnabled()
+                && row.isHardwareAccelerated() && row.getWidth() > 0 && row.getTranslation() == 0f;
     }
 
     private float getHeadsUpYTranslationStart(boolean headsUpFromBottom, boolean hasStatusBarChip) {

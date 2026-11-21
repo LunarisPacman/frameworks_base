@@ -25,11 +25,14 @@ import static com.android.systemui.statusbar.notification.row.ExpandableView.Cli
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.annotation.Nullable;
 import android.content.Context;
 import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.UserHandle;
@@ -41,6 +44,7 @@ import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.Interpolator;
+import android.view.animation.OvershootInterpolator;
 
 import androidx.annotation.VisibleForTesting;
 import com.android.app.animation.Interpolators;
@@ -89,6 +93,7 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
      * The start of the animation is at #ALPHA_APPEAR_START_FRACTION
      */
     private static final float ALPHA_APPEAR_END_FRACTION = 1;
+    private static final Interpolator HEADS_UP_REVEAL_WIDTH = new OvershootInterpolator(0.85f);
     private final Set<SourceType> mOnDetachResetRoundness = new HashSet<>();
     private int mTintedRippleColor;
     private int mNormalRippleColor;
@@ -112,6 +117,9 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     private float mAnimationTranslationY;
     private boolean mDrawingAppearAnimation;
     private ValueAnimator mAppearAnimator;
+    private boolean mIsHeadsUpReveal;
+    private boolean mIsHeadsUpReturningToCutout;
+    private ValueAnimator mHeadsUpSwipeAnimator;
     private ValueAnimator mBackgroundColorAnimator;
     private float mAppearAnimationFraction = -1.0f;
     private float mAppearAnimationTranslation;
@@ -538,13 +546,14 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
             boolean isHeadsUpAnimation, boolean isHeadsUpCycling, Runnable onStartedRunnable,
             Runnable onFinishedRunnable, AnimatorListenerAdapter animationListener,
             ClipSide clipSide) {
+        clearHeadsUpSwipeEffect();
         enableAppearDrawing(true);
         mIsHeadsUpAnimation = isHeadsUpAnimation;
         mIsHeadsUpCycling = isHeadsUpCycling;
         if (mDrawingAppearAnimation) {
             startAppearAnimation(false /* isAppearing */, translationDirection,
                     delay, duration, onStartedRunnable, onFinishedRunnable, animationListener,
-                    clipSide);
+                    clipSide, null /* headsUpCutoutOrigin */);
         } else {
             if (onStartedRunnable != null) {
                 onStartedRunnable.run();
@@ -559,20 +568,100 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     @Override
     public void performAddAnimation(long delay, long duration, boolean isHeadsUpAppear,
             boolean isHeadsUpCycling, Runnable onFinishRunnable) {
+        clearHeadsUpSwipeEffect();
         enableAppearDrawing(true);
         mIsHeadsUpAnimation = isHeadsUpAppear;
         mIsHeadsUpCycling = isHeadsUpCycling;
         if (mDrawingAppearAnimation) {
             startAppearAnimation(true /* isAppearing */, isHeadsUpAppear ? 0.0f : -1.0f, delay,
-                    duration, null, null, null, ClipSide.BOTTOM);
+                    duration, null, null, null, ClipSide.BOTTOM, null /* headsUpCutoutOrigin */);
+        }
+    }
+
+    /** Reveals a pinned heads-up row from the supplied point in the row's coordinates. */
+    public void performHeadsUpRevealAnimation(PointF origin, long duration,
+            @Nullable Runnable onFinished, AnimatorListenerAdapter listener) {
+        startHeadsUpCutoutAnimation(true, origin, duration, null, onFinished, listener);
+    }
+
+    /** Shrinks a timed-out heads-up row back into the supplied cutout position. */
+    public void performHeadsUpReturnAnimation(PointF origin, long duration,
+            Runnable onStarted, Runnable onFinished, AnimatorListenerAdapter listener) {
+        startHeadsUpCutoutAnimation(false, origin, duration, onStarted, onFinished, listener);
+    }
+
+    public boolean isHeadsUpReturningToCutout() {
+        return mIsHeadsUpReturningToCutout;
+    }
+
+    private void startHeadsUpCutoutAnimation(boolean isAppearing, PointF origin, long duration,
+            @Nullable Runnable onStarted, @Nullable Runnable onFinished,
+            AnimatorListenerAdapter listener) {
+        cancelAppearDrawing();
+        clearHeadsUpSwipeEffect();
+        mIsHeadsUpAnimation = true;
+        mIsHeadsUpCycling = false;
+        startAppearAnimation(isAppearing, 0f, 0, duration, onStarted, onFinished, listener,
+                BOTTOM, origin);
+    }
+
+    /** Finishes the reveal before a gesture takes control of the row. */
+    public void finishHeadsUpRevealAnimation() {
+        if (mIsHeadsUpReveal) {
+            mAppearAnimator.end();
+        }
+    }
+
+    /** Adds a single stretch to the existing sideways dismissal animator. */
+    public void addHeadsUpSwipeEffect(ValueAnimator animator) {
+        finishHeadsUpRevealAnimation();
+        clearHeadsUpSwipeEffect();
+        mHeadsUpSwipeAnimator = animator;
+        Matrix matrix = new Matrix();
+        float[] center = new float[2];
+        animator.addUpdateListener(animation -> {
+            if (mHeadsUpSwipeAnimator != animation) {
+                return;
+            }
+            float phase = animation.getAnimatedFraction() / 0.7f;
+            if (phase >= 1f) {
+                clearHeadsUpSwipeEffect();
+                return;
+            }
+            // ObjectAnimator applies the new swipe offset after its update listeners run.
+            float nextTranslation = (float) animation.getAnimatedValue();
+            center[0] = getWidth() / 2f + nextTranslation - getTranslationX();
+            center[1] = getActualHeight() / 2f;
+            getMatrix().mapPoints(center);
+            float stretch = (float) Math.sin(Math.PI * phase);
+            matrix.setScale(1f + 0.065f * stretch, 1f - 0.04f * stretch, center[0], center[1]);
+            setAnimationMatrix(matrix);
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (mHeadsUpSwipeAnimator == animation) {
+                    clearHeadsUpSwipeEffect();
+                }
+            }
+        });
+    }
+
+    private void clearHeadsUpSwipeEffect() {
+        if (mHeadsUpSwipeAnimator != null) {
+            mHeadsUpSwipeAnimator = null;
+            setAnimationMatrix(null);
         }
     }
 
     private void startAppearAnimation(boolean isAppearing, float translationDirection, long delay,
             long duration, final Runnable onStartedRunnable, final Runnable onFinishedRunnable,
-            AnimatorListenerAdapter animationListener, ClipSide clipSide) {
-        mAnimationTranslationY = translationDirection * getActualHeight();
+            AnimatorListenerAdapter animationListener, ClipSide clipSide,
+            @Nullable PointF headsUpCutoutOrigin) {
         cancelAppearAnimation();
+        // Cancelling a cutout animation resets drawing state before the next one takes over.
+        enableAppearDrawing(true);
+        mAnimationTranslationY = translationDirection * getActualHeight();
         if (mAppearAnimationFraction == -1.0f) {
             // not initialized yet, we start anew
             if (isAppearing) {
@@ -597,33 +686,38 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
             mCurrentAppearInterpolator = Interpolators.LINEAR;
         }
 
-        mAppearAnimator = ValueAnimator.ofFloat(mAppearAnimationFraction,
-                targetValue);
-        mAppearAnimator.setInterpolator(
-                useNonLinearAnimation() ? Interpolators.LINEAR : mCurrentAppearInterpolator);
+        final boolean animateToCutout = headsUpCutoutOrigin != null;
+        mIsHeadsUpReveal = animateToCutout && isAppearing;
+        mIsHeadsUpReturningToCutout = animateToCutout && !isAppearing;
+        mAppearAnimator = ValueAnimator.ofFloat(mAppearAnimationFraction, targetValue);
+        mAppearAnimator.setInterpolator(animateToCutout || useNonLinearAnimation()
+                ? Interpolators.LINEAR : mCurrentAppearInterpolator);
         mAppearAnimator.setDuration(
                 (long) (duration * Math.abs(mAppearAnimationFraction - targetValue)));
+        final Matrix cutoutMatrix = animateToCutout ? new Matrix() : null;
+        final float[] cutoutPoints = animateToCutout ? new float[4] : null;
+        final Runnable updateDrawing = () -> {
+            if (animateToCutout) {
+                updateHeadsUpCutoutDrawing(headsUpCutoutOrigin, cutoutMatrix, cutoutPoints,
+                        isAppearing);
+            } else {
+                updateAppearAnimationAlpha();
+                // Cycling out is clipped from the top.
+                updateAppearRect(NotificationHeadsUpCycling.isEnabled() ? clipSide : BOTTOM,
+                        getWidth(), getActualHeight());
+            }
+        };
         mAppearAnimator.addUpdateListener(animation -> {
             mAppearAnimationFraction = (float) animation.getAnimatedValue();
-            updateAppearAnimationAlpha();
-            if (NotificationHeadsUpCycling.isEnabled()) {
-                // For cycling out, we want the HUN to be clipped from the top.
-                updateAppearRect(clipSide, getWidth(), getActualHeight());
-            } else {
-                updateAppearRect(clipSide.BOTTOM, getWidth(), getActualHeight());
-            }
+            updateDrawing.run();
             invalidate();
         });
-        if (animationListener != null) {
+        if (animationListener != null && !animateToCutout) {
             mAppearAnimator.addListener(animationListener);
         }
         // we need to apply the initial state already to avoid drawn frames in the wrong state
-        updateAppearAnimationAlpha();
-        if (NotificationHeadsUpCycling.isEnabled()) {
-            updateAppearRect(clipSide, getWidth(), getActualHeight());
-        } else {
-            updateAppearRect(clipSide.BOTTOM, getWidth(), getActualHeight());
-        }
+        updateDrawing.run();
+        final int cujType = getCujType(isAppearing);
         mAppearAnimator.addListener(new AnimatorListenerAdapter() {
             private boolean mRunWithoutInterruptions;
 
@@ -632,7 +726,7 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                 if (onFinishedRunnable != null) {
                     onFinishedRunnable.run();
                 }
-                if (mRunWithoutInterruptions) {
+                if (mRunWithoutInterruptions || animateToCutout) {
                     enableAppearDrawing(false);
                 }
 
@@ -640,9 +734,9 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                 onAppearAnimationFinished(isAppearing, /* cancelled = */ !mRunWithoutInterruptions);
 
                 if (mRunWithoutInterruptions) {
-                    InteractionJankMonitor.getInstance().end(getCujType(isAppearing));
+                    InteractionJankMonitor.getInstance().end(cujType);
                 } else {
-                    InteractionJankMonitor.getInstance().cancel(getCujType(isAppearing));
+                    InteractionJankMonitor.getInstance().cancel(cujType);
                 }
             }
 
@@ -654,7 +748,7 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                 onAppearAnimationStarted(isAppearing);
                 mRunWithoutInterruptions = true;
                 Configuration.Builder builder = Configuration.Builder
-                        .withView(getCujType(isAppearing), ActivatableNotificationView.this);
+                        .withView(cujType, ActivatableNotificationView.this);
                 InteractionJankMonitor.getInstance().begin(builder);
             }
 
@@ -663,6 +757,15 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                 mRunWithoutInterruptions = false;
             }
         });
+
+        if (animateToCutout) {
+            // Register with the stack on the same frame as the heads-up event.
+            if (animationListener != null) {
+                mAppearAnimator.addListener(animationListener);
+            }
+            mAppearAnimator.start();
+            return;
+        }
 
         // Cache the original animator so we can check if the animation should be started in the
         // Choreographer callback. It's possible that the original animator (mAppearAnimator) is
@@ -679,6 +782,36 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                         onAppearAnimationSkipped(isAppearing);
                     }
                 }, delay);
+    }
+
+    private void updateHeadsUpCutoutDrawing(PointF origin, Matrix matrix, float[] points,
+            boolean isAppearing) {
+        final float fraction = mAppearAnimationFraction;
+        final float width = Math.max(1, getWidth());
+        final float height = Math.max(1, getActualHeight());
+        // On return, close the last few pixels into the origin before clearing the transform.
+        final float seedProgress = isAppearing ? 1f : Math.min(1f, fraction / 0.10f);
+        final float seed = 9f * getResources().getDisplayMetrics().density * seedProgress;
+        points[0] = origin.x;
+        points[1] = origin.y;
+        points[2] = width / 2f;
+        points[3] = height / 2f;
+        // The animation matrix is applied outside the row's layout transform.
+        getMatrix().mapPoints(points);
+        // Keep the shape narrow near the cutout so an off-center origin stays in view.
+        final float unfold = MathUtils.saturate((fraction - 0.10f) / 0.80f);
+        final Interpolator widthInterpolator = isAppearing
+                ? HEADS_UP_REVEAL_WIDTH : Interpolators.FAST_OUT_SLOW_IN;
+        final float scaleX = widthInterpolator.getInterpolation(unfold);
+        final float scaleY = Interpolators.FAST_OUT_SLOW_IN.getInterpolation(fraction);
+        matrix.setScale(MathUtils.lerp(Math.min(1f, seed / width), 1f, scaleX),
+                MathUtils.lerp(Math.min(1f, seed / height), 1f, scaleY), points[2], points[3]);
+        final float travel = Math.min(1f, fraction / 0.70f);
+        final float remaining = 1f - Interpolators.LINEAR_OUT_SLOW_IN.getInterpolation(travel);
+        matrix.postTranslate((points[0] - points[2]) * remaining,
+                (points[1] - points[3]) * remaining);
+        setAnimationMatrix(matrix);
+        updateAppearAnimationContentAlpha(fraction, 0.22f, 0.68f, Interpolators.ALPHA_IN);
     }
 
     @Override
@@ -901,6 +1034,11 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
         if (enable != mDrawingAppearAnimation) {
             mDrawingAppearAnimation = enable;
             if (!enable) {
+                if (mIsHeadsUpReveal || mIsHeadsUpReturningToCutout) {
+                    mIsHeadsUpReveal = false;
+                    mIsHeadsUpReturningToCutout = false;
+                    setAnimationMatrix(null);
+                }
                 setContentAlpha(1.0f);
                 mAppearAnimationFraction = -1;
                 setOutlineRect(null);
@@ -1045,6 +1183,10 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
 
     @Override
     protected void onDetachedFromWindow() {
+        if (mIsHeadsUpReveal || mIsHeadsUpReturningToCutout) {
+            cancelAppearDrawing();
+        }
+        clearHeadsUpSwipeEffect();
         super.onDetachedFromWindow();
         
         if (mColorSettingObserver != null) {

@@ -1158,7 +1158,9 @@ public class StackScrollAlgorithm {
                 }
             }
             if (row.isHeadsUpAnimatingAway()) {
-                if (NotificationHeadsUpCycling.isEnabled() && isCyclingOut(row, ambientState)) {
+                if (row.isHeadsUpReturningToCutout() && !ambientState.isShadeExpanded()) {
+                    childState.setYTranslation(row.getTranslationY());
+                } else if (NotificationHeadsUpCycling.isEnabled() && isCyclingOut(row, ambientState)) {
                     // If the two HUNs in the cycling animation have different heights, we need
                     // an extra y translation to align the animation.
                     int extraTranslation;

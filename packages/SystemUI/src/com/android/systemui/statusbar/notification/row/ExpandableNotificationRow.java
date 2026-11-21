@@ -368,6 +368,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
      * Whether or not the notification is using the heads up view and should peek from the top.
      */
     private boolean mIsHeadsUp;
+    private boolean mHeadsUpTimedOut;
 
     /**
      * Whether or not the notification is showing the app icon instead of the small icon.
@@ -1112,6 +1113,9 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         boolean wasAboveShelf = isAboveShelf();
         int intrinsicBefore = getIntrinsicHeight();
         mIsHeadsUp = isHeadsUp;
+        if (isHeadsUp) {
+            mHeadsUpTimedOut = false;
+        }
         mPrivateLayout.setHeadsUp(isHeadsUp);
         if (mIsSummaryWithChildren) {
             // The overflow might change since we allow more lines as HUN.
@@ -1127,6 +1131,15 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
             mAboveShelfChangedListener.onAboveShelfStateChanged(!wasAboveShelf);
         }
         updateIfNeeded();
+    }
+
+    /** Records whether the current heads-up alert expired while pinned. */
+    public void setHeadsUpTimedOut(boolean timedOut) {
+        mHeadsUpTimedOut = timedOut;
+    }
+
+    public boolean didHeadsUpTimeOut() {
+        return mHeadsUpTimedOut;
     }
 
     /**
@@ -3179,6 +3192,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
 
     public void setExpandAnimationRunning(boolean expandAnimationRunning) {
         if (expandAnimationRunning) {
+            finishHeadsUpRevealAnimation();
             setAboveShelf(true);
             mExpandAnimationRunning = true;
             getViewState().cancelAnimations(this);

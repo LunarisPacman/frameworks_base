@@ -382,7 +382,7 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         val headsUpEntry = underTest.HeadsUpEntry(notifEntry)
         headsUpEntry.setRowPinnedStatus(PinnedStatus.NotPinned)
 
-        underTest.onEntryRemoved(headsUpEntry, "test")
+        underTest.onEntryRemoved(headsUpEntry, /* timedOut= */ false)
 
         verify(headsUpManagerLogger, times(1)).logNotificationActuallyRemoved(eq(notifEntry))
     }
@@ -401,6 +401,8 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
     @Test
     fun testShowNotification_autoDismissesWithDefaultTimeout() {
         val entry = HeadsUpManagerTestUtil.createEntry(/* id= */ 0, mContext)
+        val row = kosmos.createRow()
+        entry.row = row
         useAccessibilityTimeout(false)
 
         underTest.showNotification(entry)
@@ -411,11 +413,14 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         )
 
         assertThat(underTest.isHeadsUpEntry(entry.key)).isFalse()
+        assertThat(row.didHeadsUpTimeOut()).isTrue()
     }
 
     @Test
     fun testRemoveNotification_beforeMinimumDisplayTime_notUserInitiatedHun() {
         val entry = HeadsUpManagerTestUtil.createEntry(/* id= */ 0, mContext)
+        val row = kosmos.createRow()
+        entry.row = row
         useAccessibilityTimeout(false)
 
         underTest.showNotification(entry)
@@ -434,6 +439,7 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         )
 
         assertThat(underTest.isHeadsUpEntry(entry.key)).isFalse()
+        assertThat(row.didHeadsUpTimeOut()).isFalse()
     }
 
     @Test

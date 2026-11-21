@@ -17,6 +17,9 @@
 package com.android.systemui.statusbar.notification.headsup
 
 import android.content.Context
+import android.graphics.Matrix
+import android.graphics.PointF
+import android.view.View
 import com.android.internal.policy.SystemBarUtils
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.ui.SystemBarUtilsProxy
@@ -56,6 +59,23 @@ class HeadsUpAnimator(context: Context, private val systemBarUtilsProxy: SystemB
 
         // start from or end at the top of the screen
         return -stackTopMargin - headsUpAppearStartAboveScreen
+    }
+
+    /** Returns the cutout animation anchor in the row's coordinates. */
+    fun getHeadsUpCutoutOrigin(row: View): PointF {
+        // Window insets may offset or consume the cutout. Display bounds follow display rotation.
+        val cutout = row.display?.cutout
+        val bounds =
+            cutout?.boundingRectTop?.takeUnless { it.isEmpty }
+                ?: listOfNotNull(cutout?.boundingRectLeft, cutout?.boundingRectRight)
+                    .filterNot { it.isEmpty }
+                    .minByOrNull { it.top }
+        val screenToRow = Matrix()
+        row.transformMatrixToLocal(screenToRow)
+        val center =
+            floatArrayOf(bounds?.exactCenterX() ?: 0f, bounds?.exactCenterY() ?: statusBarHeight / 2f)
+        screenToRow.mapPoints(center)
+        return PointF(if (bounds != null) center[0] else row.width / 2f, center[1])
     }
 
     /** Should be invoked when resource values may have changed. */

@@ -7027,9 +7027,10 @@ public class NotificationStackScrollLayout
 
 
     void onSwipeBegin(View viewSwiped) {
-        if (!(viewSwiped instanceof ExpandableNotificationRow)) {
+        if (!(viewSwiped instanceof ExpandableNotificationRow row)) {
             return;
         }
+        row.finishHeadsUpRevealAnimation();
         mSectionsManager.updateFirstAndLastViewsForAllSections(
                 mSections,
                 getChildrenWithBackground()
@@ -7038,10 +7039,7 @@ public class NotificationStackScrollLayout
         if (!magneticNotificationSwipes()) {
             RoundableTargets targets = mController
                     .getNotificationTargetsHelper()
-                    .findRoundableTargets(
-                            (ExpandableNotificationRow) viewSwiped,
-                            this,
-                            mSectionsManager);
+                    .findRoundableTargets(row, this, mSectionsManager);
 
             mController.getNotificationRoundnessManager()
                     .setViewsAffectedBySwipe(

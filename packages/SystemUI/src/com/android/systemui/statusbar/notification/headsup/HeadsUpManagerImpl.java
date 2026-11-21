@@ -649,6 +649,10 @@ public class HeadsUpManagerImpl
      * @param key key of notification to remove
      */
     private void removeEntry(@NonNull String key, String reason) {
+        removeEntry(key, reason, /* timedOut= */ false);
+    }
+
+    private void removeEntry(@NonNull String key, String reason, boolean timedOut) {
         HeadsUpEntry headsUpEntry = mHeadsUpEntryMap.get(key);
         boolean isWaiting;
         if (headsUpEntry == null) {
@@ -673,7 +677,7 @@ public class HeadsUpManagerImpl
             }
             entry.demoteStickyHun();
             mHeadsUpEntryMap.remove(key);
-            onEntryRemoved(finalHeadsUpEntry, reason);
+            onEntryRemoved(finalHeadsUpEntry, timedOut);
             if (NotificationThrottleHun.isEnabled()) {
                 finalHeadsUpEntry.cancelAutoRemovalCallbacks("removeEntry");
             } else {
@@ -686,12 +690,16 @@ public class HeadsUpManagerImpl
     /**
      * Manager-specific logic that should occur when an entry is removed.
      * @param headsUpEntry entry removed
-     * @param reason why onEntryRemoved was called
+     * @param timedOut whether the notification reached its scheduled display timeout
      */
     @VisibleForTesting
-    void onEntryRemoved(@NonNull HeadsUpEntry headsUpEntry, String reason) {
+    void onEntryRemoved(@NonNull HeadsUpEntry headsUpEntry, boolean timedOut) {
         NotificationEntry entry = headsUpEntry.requireEntry();
         clearPendingRemovals(headsUpEntry);
+        ExpandableNotificationRow row = entry.getRow();
+        if (row != null) {
+            row.setHeadsUpTimedOut(timedOut && row.isPinned());
+        }
         entry.setHeadsUp(false);
         setEntryPinned(headsUpEntry, PinnedStatus.NotPinned, "onEntryRemoved");
         EventLogTags.writeSysuiHeadsUpStatus(entry.getKey(), 0 /* visible */);
@@ -1301,7 +1309,6 @@ public class HeadsUpManagerImpl
         public long mPostTime;
         public long mEarliestRemovalTime;
 
-        @Nullable private Runnable mRemoveRunnable;
 
         @Nullable private Runnable mCancelRemoveRunnable;
 
@@ -1328,7 +1335,7 @@ public class HeadsUpManagerImpl
         public HeadsUpEntry(NotificationEntry entry) {
             // Attach NotificationEntry for AvalancheController to log key and
             // record mPostTime for AvalancheController sorting
-            setEntry(entry, createRemoveRunnable(entry));
+            attachEntry(entry);
         }
 
         @Override
@@ -1356,14 +1363,11 @@ public class HeadsUpManagerImpl
         /** Attach a NotificationEntry. */
         public void setEntry(@NonNull final NotificationEntry entry) {
             NotificationThrottleHun.assertInLegacyMode();
-            setEntry(entry, createRemoveRunnable(entry));
+            attachEntry(entry);
         }
 
-        private void setEntry(
-                @NonNull final NotificationEntry entry,
-                @Nullable Runnable removeRunnable) {
+        private void attachEntry(@NonNull NotificationEntry entry) {
             mEntry = entry;
-            mRemoveRunnable = removeRunnable;
 
             mPostTime = calculatePostTime();
             updateEntry(true /* updatePostTime */, "setEntry");
@@ -1490,7 +1494,8 @@ public class HeadsUpManagerImpl
                         ? Math.max(timeoutTimestamp, mEarliestRemovalTime) - now
                         : Math.max(timeoutTimestamp - now, mMinimumDisplayTimeDefault);
             };
-            scheduleAutoRemovalCallback(finishTimeCalculator, "updateEntry (not sticky)");
+            scheduleAutoRemovalCallback(finishTimeCalculator, "updateEntry (not sticky)",
+                    /* timedOut= */ true);
 
             // Notify the manager, that the posted time has changed.
             updateTopHeadsUpFlow();
@@ -1699,7 +1704,6 @@ public class HeadsUpManagerImpl
             NotificationThrottleHun.assertInLegacyMode();
             cancelAutoRemovalCallbacks("reset()");
             mEntry = null;
-            mRemoveRunnable = null;
             mExpanded = false;
             mRemoteInputActive = false;
             mGutsShownPinned = false;
@@ -1728,7 +1732,7 @@ public class HeadsUpManagerImpl
         }
 
         private void scheduleAutoRemovalCallback(FinishTimeUpdater finishTimeCalculator,
-                @NonNull String reason) {
+                @NonNull String reason, boolean timedOut) {
             if (mEntry == null) {
                 Log.wtf(TAG, "#scheduleAutoRemovalCallback with null mEntry; returning early");
                 return;
@@ -1737,14 +1741,15 @@ public class HeadsUpManagerImpl
             Runnable runnable = () -> {
                 long delayMs = finishTimeCalculator.updateAndGetTimeRemaining();
 
-                if (mRemoveRunnable == null) {
-                    Log.wtf(TAG, "scheduleAutoRemovalCallback with no callback set");
+                NotificationEntry entry = mEntry;
+                if (entry == null) {
+                    Log.wtf(TAG, "scheduleAutoRemovalCallback with no entry");
                     return;
                 }
 
                 final boolean deletedExistingRemovalRunnable = cancelAutoRemovalCallbackInternal();
-                mCancelRemoveRunnable = mExecutor.executeDelayed(mRemoveRunnable,
-                        delayMs);
+                mCancelRemoveRunnable = mExecutor.executeDelayed(
+                        () -> removeOnSchedule(entry, timedOut), delayMs);
 
                 if (deletedExistingRemovalRunnable) {
                     mLogger.logAutoRemoveRescheduled(mEntry, delayMs, reason);
@@ -1771,33 +1776,28 @@ public class HeadsUpManagerImpl
          * Remove the entry at the earliest allowed removal time.
          */
         public void removeAsSoonAsPossible() {
-            if (mRemoveRunnable != null) {
-
+            if (mEntry != null) {
                 FinishTimeUpdater finishTimeCalculator = () ->
                         mEarliestRemovalTime - mSystemClock.elapsedRealtime();
-                scheduleAutoRemovalCallback(finishTimeCalculator, "removeAsSoonAsPossible");
+                scheduleAutoRemovalCallback(finishTimeCalculator, "removeAsSoonAsPossible",
+                        /* timedOut= */ false);
             }
         }
 
-        /** Creates a runnable to remove this notification from the alerting entries. */
-        private Runnable createRemoveRunnable(NotificationEntry entry) {
-            return () -> {
-                if (!NotificationThrottleHun.isEnabled()
-                        && !mVisualStabilityProvider.isReorderingAllowed()
-                        // We don't want to allow reordering while pulsing, but headsup need to
-                        // time out anyway
-                        && !entry.showingPulsing()) {
-                    mEntriesToRemoveWhenReorderingAllowed.add(entry);
-                    mVisualStabilityProvider.addTemporaryReorderingAllowedListener(
-                            mOnReorderingAllowedListener);
-                } else if (mTrackingHeadsUp.getValue()) {
-                    mEntriesToRemoveAfterExpand.add(entry);
-                    mLogger.logRemoveEntryAfterExpand(entry);
-                } else if (mVisualStabilityProvider.isReorderingAllowed()
-                        || entry.showingPulsing()) {
-                    removeEntry(entry.getKey(), "createRemoveRunnable");
-                }
-            };
+        private void removeOnSchedule(NotificationEntry entry, boolean timedOut) {
+            if (!NotificationThrottleHun.isEnabled()
+                    && !mVisualStabilityProvider.isReorderingAllowed()
+                    // Pulsing heads-up notifications still need to time out.
+                    && !entry.showingPulsing()) {
+                mEntriesToRemoveWhenReorderingAllowed.add(entry);
+                mVisualStabilityProvider.addTemporaryReorderingAllowedListener(
+                        mOnReorderingAllowedListener);
+            } else if (mTrackingHeadsUp.getValue()) {
+                mEntriesToRemoveAfterExpand.add(entry);
+                mLogger.logRemoveEntryAfterExpand(entry);
+            } else if (mVisualStabilityProvider.isReorderingAllowed() || entry.showingPulsing()) {
+                removeEntry(entry.getKey(), "removeOnSchedule", timedOut);
+            }
         }
 
         /**

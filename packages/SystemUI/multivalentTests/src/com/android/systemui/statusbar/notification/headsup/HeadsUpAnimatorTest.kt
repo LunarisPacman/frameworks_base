@@ -16,7 +16,11 @@
 
 package com.android.systemui.statusbar.notification.headsup
 
-import android.platform.test.annotations.EnableFlags
+import android.graphics.PointF
+import android.graphics.Rect
+import android.view.Display
+import android.view.DisplayCutout
+import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
@@ -27,6 +31,8 @@ import com.google.common.truth.Truth.assertThat
 import kotlin.test.Test
 import org.junit.Before
 import org.junit.runner.RunWith
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
@@ -117,6 +123,45 @@ class HeadsUpAnimatorTest : SysuiTestCase() {
                 )
             )
             .isEqualTo(newYAbove + 300)
+    }
+
+    @Test
+    fun getHeadsUpCutoutOrigin_usesOffCenterTopCutout() {
+        val underTest = HeadsUpAnimator(context, kosmos.fakeSystemBarUtilsProxy)
+        val cutout = DisplayCutout.Builder().setBoundingRectTop(Rect(306, 4, 334, 36)).build()
+
+        assertThat(underTest.getHeadsUpCutoutOrigin(rowWithCutout(cutout)))
+            .isEqualTo(PointF(300f, -82f))
+    }
+
+    @Test
+    fun getHeadsUpCutoutOrigin_usesSideCutoutInLandscape() {
+        val underTest = HeadsUpAnimator(context, kosmos.fakeSystemBarUtilsProxy)
+        val cutout = DisplayCutout.Builder().setBoundingRectLeft(Rect(0, 84, 28, 120)).build()
+
+        assertThat(underTest.getHeadsUpCutoutOrigin(rowWithCutout(cutout)))
+            .isEqualTo(PointF(-6f, 0f))
+    }
+
+    @Test
+    fun getHeadsUpCutoutOrigin_noCutout_usesStatusBarHeightAboveRowCenter() {
+        kosmos.fakeSystemBarUtilsProxy.fakeStatusBarHeight = 40
+        val underTest = HeadsUpAnimator(context, kosmos.fakeSystemBarUtilsProxy)
+
+        assertThat(underTest.getHeadsUpCutoutOrigin(rowWithCutout(null)))
+            .isEqualTo(PointF(180f, -82f))
+    }
+
+    private fun rowWithCutout(cutout: DisplayCutout?): View {
+        val display = mock<Display>()
+        whenever(display.cutout).thenReturn(cutout)
+        return object : View(context) {
+                override fun getDisplay(): Display = display
+            }
+            .apply {
+                layout(20, 96, 380, 168)
+                translationY = 6f
+            }
     }
 
     companion object {
