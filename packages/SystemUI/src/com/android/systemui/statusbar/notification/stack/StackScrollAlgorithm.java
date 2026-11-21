@@ -237,7 +237,12 @@ public class StackScrollAlgorithm {
     private void hideNotificationsBelowShelf(StackScrollAlgorithmState algorithmState,
             AmbientState ambientState) {
         for (ExpandableView view : algorithmState.visibleChildren) {
-            final ViewState viewState = view.getViewState();
+            final ExpandableViewState viewState = view.getViewState();
+            if (view instanceof ExpandableNotificationRow row
+                    && shouldHoldHeadsUpReturn(row, ambientState)) {
+                viewState.holdHeadsUpReturn(row);
+                continue;
+            }
             NotificationShelf shelf = ambientState.getShelf();
             if (shelf != null) {
                 final ViewState shelfState = shelf.getViewState();
@@ -258,6 +263,12 @@ public class StackScrollAlgorithm {
                 }
             }
         }
+    }
+
+    private static boolean shouldHoldHeadsUpReturn(
+            ExpandableNotificationRow row, AmbientState ambientState) {
+        return row.isHeadsUpReturningToCutout() && !ambientState.isShadeExpanded()
+                && !ambientState.isDozing() && !ambientState.isHiddenAtAll();
     }
 
     private float interpolateFooterAlpha(AmbientState ambientState) {
@@ -1158,7 +1169,7 @@ public class StackScrollAlgorithm {
                 }
             }
             if (row.isHeadsUpAnimatingAway()) {
-                if (row.isHeadsUpReturningToCutout() && !ambientState.isShadeExpanded()) {
+                if (shouldHoldHeadsUpReturn(row, ambientState)) {
                     childState.setYTranslation(row.getTranslationY());
                 } else if (NotificationHeadsUpCycling.isEnabled() && isCyclingOut(row, ambientState)) {
                     // If the two HUNs in the cycling animation have different heights, we need

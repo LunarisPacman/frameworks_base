@@ -116,21 +116,7 @@ public class HeadsUpTouchHelper implements Gefingerpoken {
                 if (mTouchingHeadsUpView && Math.abs(h) > mTouchSlop
                         && Math.abs(h) > Math.abs(x - mInitialTouchX)) {
                     if (!SceneContainerFlag.isEnabled()) {
-                        setTrackingHeadsUp(true);
-                        mCollapseSnoozes = h < 0;
-                        mInitialTouchX = x;
-                        mInitialTouchY = y;
-                        int startHeight = (int) (mPickedChild.getActualHeight()
-                                + mPickedChild.getTranslationY());
-                        mPanel.setHeadsUpDraggingStartingHeight(startHeight);
-                        mPanel.startExpand(x, y, true /* startTracking */, startHeight);
-
-                        // This call needs to be after the expansion start otherwise we will get a
-                        // flicker of one frame as it's not expanded yet.
-                        mHeadsUpManager.unpinAll(true);
-
-                        clearNotificationEffects();
-                        endMotion();
+                        startTrackingHeadsUp(x, y, h);
                     }
                     return true;
                 }
@@ -150,6 +136,24 @@ public class HeadsUpTouchHelper implements Gefingerpoken {
                 break;
         }
         return false;
+    }
+
+    private void startTrackingHeadsUp(float x, float y, float deltaY) {
+        setTrackingHeadsUp(true);
+        mPickedChild.finishHeadsUpRevealAnimation();
+        mCollapseSnoozes = deltaY < 0;
+        mInitialTouchX = x;
+        mInitialTouchY = y;
+        int startHeight = (int) (mPickedChild.getActualHeight() + mPickedChild.getTranslationY());
+        mPanel.setHeadsUpDraggingStartingHeight(startHeight);
+        mPanel.startExpand(x, y, true /* startTracking */, startHeight);
+
+        if (!SceneContainerFlag.isEnabled()) {
+            // Start expanding before unpinning so the heads-up window stays visible.
+            mHeadsUpManager.unpinAll(true);
+        }
+        clearNotificationEffects();
+        endMotion();
     }
 
     private void setTrackingHeadsUp(boolean tracking) {
@@ -190,17 +194,7 @@ public class HeadsUpTouchHelper implements Gefingerpoken {
                     final float h = y - mInitialTouchY;
                     if (mTouchingHeadsUpView && Math.abs(h) > mTouchSlop
                             && Math.abs(h) > Math.abs(x - mInitialTouchX)) {
-                        setTrackingHeadsUp(true);
-                        mCollapseSnoozes = h < 0;
-                        mInitialTouchX = x;
-                        mInitialTouchY = y;
-                        int startHeight = (int) (mPickedChild.getActualHeight()
-                                + mPickedChild.getTranslationY());
-                        mPanel.setHeadsUpDraggingStartingHeight(startHeight);
-                        mPanel.startExpand(x, y, true /* startTracking */, startHeight);
-
-                        clearNotificationEffects();
-                        endMotion();
+                        startTrackingHeadsUp(x, y, h);
                         return true;
                     }
                     break;

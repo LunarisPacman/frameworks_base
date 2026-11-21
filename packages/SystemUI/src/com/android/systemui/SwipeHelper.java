@@ -265,6 +265,10 @@ public class SwipeHelper implements Gefingerpoken, Dumpable {
         return 1f - Math.max(0, Math.min(1, progress / SWIPE_PROGRESS_FADE_END));
     }
 
+    protected float getSwipeAlpha(View view, float progress) {
+        return getSwipeAlpha(progress);
+    }
+
     private void updateSwipeProgressFromOffset(View animView, boolean dismissable) {
         updateSwipeProgressFromOffset(animView, dismissable, getTranslation(animView));
     }
@@ -281,7 +285,7 @@ public class SwipeHelper implements Gefingerpoken, Dumpable {
                 } else {
                     animView.setLayerType(View.LAYER_TYPE_NONE, null);
                 }
-                updateSwipeProgressAlpha(animView, getSwipeAlpha(swipeProgress));
+                updateSwipeProgressAlpha(animView, getSwipeAlpha(animView, swipeProgress));
             }
         }
         invalidateGlobalRegion(animView);

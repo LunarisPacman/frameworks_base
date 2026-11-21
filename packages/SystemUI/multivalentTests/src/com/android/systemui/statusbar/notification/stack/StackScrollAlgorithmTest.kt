@@ -820,6 +820,28 @@ class StackScrollAlgorithmTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
+    fun resetViewStates_hunReturningToCutout_retainsVisibleGeometryPastShelf() {
+        ambientState.shelf = notificationShelf
+        notificationShelf.viewState.yTranslation = 40f
+        whenever(notificationRow.isHeadsUpAnimatingAway).thenReturn(true)
+        whenever(notificationRow.isHeadsUpReturningToCutout).thenReturn(true)
+        whenever(notificationRow.translationY).thenReturn(96f)
+        whenever(notificationRow.alpha).thenReturn(0.85f)
+        whenever(notificationRow.actualHeight).thenReturn(100)
+        whenever(notificationRow.clipTopAmount).thenReturn(4)
+
+        stackScrollAlgorithm.resetViewStates(ambientState, 0)
+
+        val state = notificationRow.viewState
+        assertThat(state.yTranslation).isEqualTo(96f)
+        assertThat(state.alpha).isEqualTo(0.85f)
+        assertThat(state.height).isEqualTo(100)
+        assertThat(state.clipTopAmount).isEqualTo(4)
+        assertThat(state.hidden).isFalse()
+        assertThat(state.inShelf).isFalse()
+    }
+
+    @Test
     @DisableSceneContainer
     fun resetViewStates_hunAnimatingAwayWhileDozing_yTranslationIsInset() {
         whenever(notificationRow.isHeadsUpAnimatingAway).thenReturn(true)

@@ -452,8 +452,8 @@ public class HeadsUpManagerImpl
     @Override
     public void onExpandingFinished() {
         if (mReleaseOnExpandFinish) {
-            releaseAllImmediately();
             mReleaseOnExpandFinish = false;
+            releaseAllImmediately(HeadsUpRemovalReason.SWIPE_UP);
         } else {
             for (NotificationEntry entry : getAllEntries().toList()) {
                 entry.setSeenInShade(true);
@@ -472,6 +472,10 @@ public class HeadsUpManagerImpl
      * Clears all managed notifications.
      */
     public void releaseAllImmediately() {
+        releaseAllImmediately(HeadsUpRemovalReason.DEFAULT);
+    }
+
+    private void releaseAllImmediately(HeadsUpRemovalReason removalReason) {
         mLogger.logReleaseAllImmediately();
         // A copy is necessary here as we are changing the underlying map.  This would cause
         // undefined behavior if we iterated over the key set directly.
@@ -482,10 +486,10 @@ public class HeadsUpManagerImpl
         List<String> waitingKeysToRemove = mAvalancheController.getWaitingKeys();
 
         for (String key : keysToRemove) {
-            removeEntry(key, "releaseAllImmediately (keysToRemove)");
+            removeEntry(key, "releaseAllImmediately (keysToRemove)", removalReason);
         }
         for (String key : waitingKeysToRemove) {
-            removeEntry(key, "releaseAllImmediately (waitingKeysToRemove)");
+            removeEntry(key, "releaseAllImmediately (waitingKeysToRemove)", removalReason);
         }
     }
 
@@ -649,10 +653,10 @@ public class HeadsUpManagerImpl
      * @param key key of notification to remove
      */
     private void removeEntry(@NonNull String key, String reason) {
-        removeEntry(key, reason, /* timedOut= */ false);
+        removeEntry(key, reason, HeadsUpRemovalReason.DEFAULT);
     }
 
-    private void removeEntry(@NonNull String key, String reason, boolean timedOut) {
+    private void removeEntry(@NonNull String key, String reason, HeadsUpRemovalReason removalReason) {
         HeadsUpEntry headsUpEntry = mHeadsUpEntryMap.get(key);
         boolean isWaiting;
         if (headsUpEntry == null) {
@@ -677,7 +681,7 @@ public class HeadsUpManagerImpl
             }
             entry.demoteStickyHun();
             mHeadsUpEntryMap.remove(key);
-            onEntryRemoved(finalHeadsUpEntry, timedOut);
+            onEntryRemoved(finalHeadsUpEntry, removalReason);
             if (NotificationThrottleHun.isEnabled()) {
                 finalHeadsUpEntry.cancelAutoRemovalCallbacks("removeEntry");
             } else {
@@ -690,15 +694,17 @@ public class HeadsUpManagerImpl
     /**
      * Manager-specific logic that should occur when an entry is removed.
      * @param headsUpEntry entry removed
-     * @param timedOut whether the notification reached its scheduled display timeout
+     * @param removalReason how the heads-up alert ended
      */
     @VisibleForTesting
-    void onEntryRemoved(@NonNull HeadsUpEntry headsUpEntry, boolean timedOut) {
+    void onEntryRemoved(@NonNull HeadsUpEntry headsUpEntry, HeadsUpRemovalReason removalReason) {
         NotificationEntry entry = headsUpEntry.requireEntry();
         clearPendingRemovals(headsUpEntry);
         ExpandableNotificationRow row = entry.getRow();
         if (row != null) {
-            row.setHeadsUpTimedOut(timedOut && row.isPinned());
+            row.setHeadsUpRemovalReason(
+                    removalReason == HeadsUpRemovalReason.TIMEOUT && !row.isPinned()
+                            ? HeadsUpRemovalReason.DEFAULT : removalReason);
         }
         entry.setHeadsUp(false);
         setEntryPinned(headsUpEntry, PinnedStatus.NotPinned, "onEntryRemoved");
@@ -1796,7 +1802,8 @@ public class HeadsUpManagerImpl
                 mEntriesToRemoveAfterExpand.add(entry);
                 mLogger.logRemoveEntryAfterExpand(entry);
             } else if (mVisualStabilityProvider.isReorderingAllowed() || entry.showingPulsing()) {
-                removeEntry(entry.getKey(), "removeOnSchedule", timedOut);
+                removeEntry(entry.getKey(), "removeOnSchedule",
+                        timedOut ? HeadsUpRemovalReason.TIMEOUT : HeadsUpRemovalReason.DEFAULT);
             }
         }
 

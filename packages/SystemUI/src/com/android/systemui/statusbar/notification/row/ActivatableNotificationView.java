@@ -623,8 +623,8 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
             if (mHeadsUpSwipeAnimator != animation) {
                 return;
             }
-            float phase = animation.getAnimatedFraction() / 0.7f;
-            if (phase >= 1f) {
+            float time = animation.getCurrentPlayTime() / (float) animation.getDuration();
+            if (time >= 0.85f) {
                 clearHeadsUpSwipeEffect();
                 return;
             }
@@ -633,8 +633,10 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
             center[0] = getWidth() / 2f + nextTranslation - getTranslationX();
             center[1] = getActualHeight() / 2f;
             getMatrix().mapPoints(center);
+            float phase = Interpolators.LINEAR_OUT_SLOW_IN.getInterpolation(time / 0.85f);
             float stretch = (float) Math.sin(Math.PI * phase);
-            matrix.setScale(1f + 0.065f * stretch, 1f - 0.04f * stretch, center[0], center[1]);
+            matrix.setScale(1f + 0.16f * stretch, 1f - 0.14f * stretch, center[0], center[1]);
+            matrix.postTranslate(0f, 4f * getResources().getDisplayMetrics().density * stretch);
             setAnimationMatrix(matrix);
         });
         animator.addListener(new AnimatorListenerAdapter() {
@@ -789,29 +791,47 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
         final float fraction = mAppearAnimationFraction;
         final float width = Math.max(1, getWidth());
         final float height = Math.max(1, getActualHeight());
+        final float density = getResources().getDisplayMetrics().density;
         // On return, close the last few pixels into the origin before clearing the transform.
         final float seedProgress = isAppearing ? 1f : Math.min(1f, fraction / 0.10f);
-        final float seed = 9f * getResources().getDisplayMetrics().density * seedProgress;
+        final float seed = 9f * density * seedProgress;
         points[0] = origin.x;
         points[1] = origin.y;
         points[2] = width / 2f;
         points[3] = height / 2f;
         // The animation matrix is applied outside the row's layout transform.
         getMatrix().mapPoints(points);
-        // Keep the shape narrow near the cutout so an off-center origin stays in view.
-        final float unfold = MathUtils.saturate((fraction - 0.10f) / 0.80f);
-        final Interpolator widthInterpolator = isAppearing
-                ? HEADS_UP_REVEAL_WIDTH : Interpolators.FAST_OUT_SLOW_IN;
-        final float scaleX = widthInterpolator.getInterpolation(unfold);
-        final float scaleY = Interpolators.FAST_OUT_SLOW_IN.getInterpolation(fraction);
+        final float scaleX;
+        final float scaleY;
+        final float towardCutout;
+        final float rebound;
+        if (isAppearing) {
+            // Travel while compact, then give the card one vertical rebound as it opens.
+            float unfold = MathUtils.saturate((fraction - 0.10f) / 0.80f);
+            float rise = MathUtils.saturate((fraction - 0.06f) / 0.58f);
+            float settle = MathUtils.saturate((fraction - 0.49f) / 0.42f);
+            rebound = (float) Math.sin(Math.PI * settle);
+            scaleX = HEADS_UP_REVEAL_WIDTH.getInterpolation(unfold);
+            scaleY = Interpolators.FAST_OUT_SLOW_IN.getInterpolation(rise) + 0.12f * rebound;
+            towardCutout = 1f - Interpolators.LINEAR_OUT_SLOW_IN.getInterpolation(
+                    Math.min(1f, fraction / 0.66f));
+        } else {
+            // Pull in the sides before traveling to an off-center cutout.
+            float exit = 1f - fraction;
+            scaleX = 1f - Interpolators.FAST_OUT_SLOW_IN.getInterpolation(
+                    Math.min(1f, exit / 0.88f));
+            scaleY = 1f - Interpolators.FAST_OUT_SLOW_IN.getInterpolation(exit);
+            towardCutout = Interpolators.FAST_OUT_SLOW_IN.getInterpolation(
+                    MathUtils.saturate((exit - 0.16f) / 0.84f));
+            rebound = 0f;
+        }
         matrix.setScale(MathUtils.lerp(Math.min(1f, seed / width), 1f, scaleX),
                 MathUtils.lerp(Math.min(1f, seed / height), 1f, scaleY), points[2], points[3]);
-        final float travel = Math.min(1f, fraction / 0.70f);
-        final float remaining = 1f - Interpolators.LINEAR_OUT_SLOW_IN.getInterpolation(travel);
-        matrix.postTranslate((points[0] - points[2]) * remaining,
-                (points[1] - points[3]) * remaining);
+        matrix.postTranslate((points[0] - points[2]) * towardCutout,
+                (points[1] - points[3]) * towardCutout + 8f * density * rebound);
         setAnimationMatrix(matrix);
-        updateAppearAnimationContentAlpha(fraction, 0.22f, 0.68f, Interpolators.ALPHA_IN);
+        updateAppearAnimationContentAlpha(fraction, isAppearing ? 0.18f : 0.46f,
+                isAppearing ? 0.64f : 0.91f, Interpolators.ALPHA_IN);
     }
 
     @Override

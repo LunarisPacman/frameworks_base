@@ -246,6 +246,13 @@ interface HeadsUpManager : Dumpable {
     fun onEntryAnimatingAwayEnded(entry: NotificationEntry)
 }
 
+/** How a heads-up alert ended, used to choose its exit animation. */
+enum class HeadsUpRemovalReason {
+    DEFAULT,
+    TIMEOUT,
+    SWIPE_UP,
+}
+
 /** Sets the animation state of the HeadsUpManager. */
 interface AnimationStateHandler {
     fun setHeadsUpGoingAwayAnimationsAllowed(allowed: Boolean)

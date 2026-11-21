@@ -161,6 +161,17 @@ public class ExpandableViewState extends ViewState {
         }
     }
 
+    /** Holds the visible row state while the heads-up draw transform controls its motion. */
+    void holdHeadsUpReturn(ExpandableNotificationRow row) {
+        setYTranslation(row.getTranslationY());
+        setAlpha(row.getAlpha());
+        height = row.getActualHeight();
+        clipTopAmount = row.getClipTopAmount();
+        clipBottomAmount = row.getClipBottomAmount();
+        hidden = false;
+        inShelf = false;
+    }
+
     /**
      * Applies a {@link ExpandableViewState} to a {@link ExpandableView}.
      */

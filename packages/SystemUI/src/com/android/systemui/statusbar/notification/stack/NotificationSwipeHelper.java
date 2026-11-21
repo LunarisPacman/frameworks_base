@@ -26,6 +26,7 @@ import android.content.res.Resources;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.service.notification.StatusBarNotification;
+import android.util.MathUtils;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -61,6 +62,7 @@ class NotificationSwipeHelper extends SwipeHelper implements NotificationSwipeAc
     private final NotificationMenuRowPlugin.OnMenuEventListener mMenuListener;
 
     private static final long SWIPE_MENU_TIMING = 200;
+    private static final long HEADS_UP_MIN_DISMISS_DURATION = 220;
 
     // Hold a weak ref to the menu row so that it isn't accidentally retained in memory. The
     // lifetime of the row should be the same as the ActivatableView, which is owned by the
@@ -200,6 +202,20 @@ class NotificationSwipeHelper extends SwipeHelper implements NotificationSwipeAc
     }
 
     @Override
+    protected float getSwipeAlpha(View view, float progress) {
+        if (isPinnedHeadsUpSwipe(view)) {
+            // Leave the card readable while the finger is still over most of it.
+            return MathUtils.saturate((1f - progress) / 0.55f);
+        }
+        return super.getSwipeAlpha(view, progress);
+    }
+
+    private boolean isPinnedHeadsUpSwipe(View view) {
+        return view instanceof ExpandableNotificationRow row && row.isPinned()
+                && row.isHardwareAccelerated() && ValueAnimator.areAnimatorsEnabled();
+    }
+
+    @Override
     protected void updateSwipeProgressAlpha(View animView, float alpha) {
         if (animView instanceof ExpandableNotificationRow) {
             ((ExpandableNotificationRow) animView).setContentAlpha(alpha);
@@ -308,10 +324,9 @@ class NotificationSwipeHelper extends SwipeHelper implements NotificationSwipeAc
     @Override
     public void dismissChild(final View view, float velocity,
             boolean useAccelerateInterpolator) {
+        boolean headsUpSwipe = getSwipedView() == view && isPinnedHeadsUpSwipe(view);
         superDismissChild(view, velocity, useAccelerateInterpolator);
-        if (mCallback.shouldDismissQuickly()) {
-            // We don't want to quick-dismiss when it's a heads up as this might lead to closing
-            // of the panel early.
+        if (mCallback.shouldDismissQuickly() && !headsUpSwipe) {
             mCallback.handleChildViewDismissed(view);
         }
         mCallback.onDismiss();
@@ -322,10 +337,11 @@ class NotificationSwipeHelper extends SwipeHelper implements NotificationSwipeAc
     protected void prepareDismissAnimation(View view, Animator anim) {
         super.prepareDismissAnimation(view, anim);
 
-        if (!mIsExpanded && getSwipedView() == view && ValueAnimator.areAnimatorsEnabled()
-                && view instanceof ExpandableNotificationRow row && row.isPinned()
-                && row.isHardwareAccelerated() && anim instanceof ValueAnimator swipeAnimator) {
-            row.addHeadsUpSwipeEffect(swipeAnimator);
+        if (getSwipedView() == view && isPinnedHeadsUpSwipe(view)
+                && anim instanceof ValueAnimator swipeAnimator) {
+            swipeAnimator.setDuration(Math.max(swipeAnimator.getDuration(),
+                    HEADS_UP_MIN_DISMISS_DURATION));
+            ((ExpandableNotificationRow) view).addHeadsUpSwipeEffect(swipeAnimator);
         }
 
         if (view instanceof ExpandableNotificationRow

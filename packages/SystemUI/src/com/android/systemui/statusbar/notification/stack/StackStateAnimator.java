@@ -39,6 +39,7 @@ import com.android.systemui.shared.clocks.AnimatableClockView;
 import com.android.systemui.statusbar.NotificationShelf;
 import com.android.systemui.statusbar.notification.PhysicsPropertyAnimator;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpAnimator;
+import com.android.systemui.statusbar.notification.headsup.HeadsUpRemovalReason;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.row.ExpandableView;
 import com.android.systemui.statusbar.notification.row.StackScrollerDecorView;
@@ -74,8 +75,7 @@ public class StackStateAnimator {
     public static final int ANIMATION_DELAY_PER_ELEMENT_GO_TO_FULL_SHADE = 48;
     public static final int DELAY_EFFECT_MAX_INDEX_DIFFERENCE = 2;
     private static final int MAX_STAGGER_COUNT = 5;
-    private static final int ANIMATION_DURATION_HEADS_UP_REVEAL = 330;
-    private static final int ANIMATION_DURATION_HEADS_UP_RETURN = 260;
+    private static final int ANIMATION_DURATION_HEADS_UP_RETURN = 390;
 
     @VisibleForTesting
     int mGoToFullShadeAppearingTranslation;
@@ -576,7 +576,7 @@ public class StackStateAnimator {
                         && row.getViewState().height > 0) {
                     row.getViewState().applyToView(row);
                     row.performHeadsUpRevealAnimation(mHeadsUpAnimator.getHeadsUpCutoutOrigin(row),
-                            ANIMATION_DURATION_HEADS_UP_REVEAL, onAnimationEnd,
+                            ANIMATION_DURATION_HEADS_UP_APPEAR, onAnimationEnd,
                             getGlobalAnimationFinishedListener());
                     needsCustomAnimation = true;
                 } else {
@@ -708,8 +708,9 @@ public class StackStateAnimator {
                             event.animationType == ANIMATION_TYPE_HEADS_UP_DISAPPEAR
                                     && !mShadeExpanded
                                     && changingView instanceof ExpandableNotificationRow row
-                                    && row.didHeadsUpTimeOut() && row.isHeadsUpAnimatingAway()
-                                    && !row.showingPulsing() && !ViewState.isAnimatingY(row)
+                                    && row.getHeadsUpRemovalReason() == HeadsUpRemovalReason.TIMEOUT
+                                    && row.isHeadsUpAnimatingAway()
+                                    && !row.showingPulsing()
                                     && !row.isDrawingAppearAnimation()
                                     && row.getVisibility() == View.VISIBLE
                                     && row.getActualHeight() > 0
@@ -766,7 +767,7 @@ public class StackStateAnimator {
 
                     if (returningRow != null) {
                         // The draw transform owns the motion until the return finishes.
-                        returningRow.getViewState().setYTranslation(returningRow.getTranslationY());
+                        returningRow.getViewState().holdHeadsUpReturn(returningRow);
                         returningRow.performHeadsUpReturnAnimation(
                                 mHeadsUpAnimator.getHeadsUpCutoutOrigin(returningRow),
                                 ANIMATION_DURATION_HEADS_UP_RETURN, startAnimation, postAnimation,

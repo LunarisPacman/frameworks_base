@@ -3717,7 +3717,8 @@ public final class NotificationPanelViewController implements
             // we need to make sure that an animation happens in this case, otherwise the
             // notification
             // will stick to the top without any interaction.
-            if (isFullyCollapsed() && entry.isRowHeadsUp() && !isKeyguardShowing()) {
+            if (!mExpandingFromHeadsUp && isFullyCollapsed() && entry.isRowHeadsUp()
+                    && !isKeyguardShowing()) {
                 mNotificationStackScrollLayoutController.generateHeadsUpAnimation(entry, false);
                 entry.setHeadsUpIsVisible();
             }

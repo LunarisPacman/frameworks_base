@@ -122,6 +122,7 @@ import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShade
 import com.android.systemui.statusbar.notification.footer.ui.view.FooterView;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpAnimationEvent;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpAnimator;
+import com.android.systemui.statusbar.notification.headsup.HeadsUpRemovalReason;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpTouchHelper;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpUtil;
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
@@ -5832,6 +5833,13 @@ public class NotificationStackScrollLayout
             ExpandableNotificationRow row,
             boolean isHeadsUp,
             @Nullable RectF statusBarChipBounds) {
+        if (!isHeadsUp && row.getHeadsUpRemovalReason() == HeadsUpRemovalReason.SWIPE_UP) {
+            // The shade collapse already moved this alert off-screen.
+            mHeadsUpChangeAnimations.remove(row);
+            row.setHeadsUpAnimatingAway(false);
+            requestChildrenUpdate();
+            return;
+        }
         // TODO(b/393369891): Use the chip bounds to animate the heads up animation from the chip.
         boolean hasStatusBarChip = statusBarChipBounds != null;
         boolean addAnimation =

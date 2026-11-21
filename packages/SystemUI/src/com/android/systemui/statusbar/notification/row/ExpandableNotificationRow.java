@@ -128,6 +128,7 @@ import com.android.systemui.statusbar.notification.collection.provider.Notificat
 import com.android.systemui.statusbar.notification.collection.render.GroupExpansionManager;
 import com.android.systemui.statusbar.notification.collection.render.GroupMembershipManager;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpManager;
+import com.android.systemui.statusbar.notification.headsup.HeadsUpRemovalReason;
 import com.android.systemui.statusbar.notification.headsup.PinnedStatus;
 import com.android.systemui.statusbar.notification.logging.NotificationCounters;
 import com.android.systemui.statusbar.notification.people.PeopleNotificationIdentifier;
@@ -368,7 +369,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
      * Whether or not the notification is using the heads up view and should peek from the top.
      */
     private boolean mIsHeadsUp;
-    private boolean mHeadsUpTimedOut;
+    private HeadsUpRemovalReason mHeadsUpRemovalReason = HeadsUpRemovalReason.DEFAULT;
 
     /**
      * Whether or not the notification is showing the app icon instead of the small icon.
@@ -1114,7 +1115,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         int intrinsicBefore = getIntrinsicHeight();
         mIsHeadsUp = isHeadsUp;
         if (isHeadsUp) {
-            mHeadsUpTimedOut = false;
+            mHeadsUpRemovalReason = HeadsUpRemovalReason.DEFAULT;
         }
         mPrivateLayout.setHeadsUp(isHeadsUp);
         if (mIsSummaryWithChildren) {
@@ -1133,13 +1134,13 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
         updateIfNeeded();
     }
 
-    /** Records whether the current heads-up alert expired while pinned. */
-    public void setHeadsUpTimedOut(boolean timedOut) {
-        mHeadsUpTimedOut = timedOut;
+    /** Records how the previous heads-up presentation ended. */
+    public void setHeadsUpRemovalReason(HeadsUpRemovalReason removalReason) {
+        mHeadsUpRemovalReason = removalReason;
     }
 
-    public boolean didHeadsUpTimeOut() {
-        return mHeadsUpTimedOut;
+    public HeadsUpRemovalReason getHeadsUpRemovalReason() {
+        return mHeadsUpRemovalReason;
     }
 
     /**

@@ -92,6 +92,7 @@ import com.android.systemui.statusbar.notification.data.repository.HeadsUpReposi
 import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShadeView;
 import com.android.systemui.statusbar.notification.footer.ui.view.FooterView;
 import com.android.systemui.statusbar.notification.headsup.AvalancheController;
+import com.android.systemui.statusbar.notification.headsup.HeadsUpRemovalReason;
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.row.ExpandableView;
@@ -1322,6 +1323,22 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         // THEN headsUpAnimatingAway is true
         verify(headsUpAnimatingAwayListener).accept(true);
         assertTrue(mStackScroller.mHeadsUpAnimatingAway);
+    }
+
+    @Test
+    @EnableSceneContainer
+    public void testGenerateHeadsUpDisappearEvent_afterUpwardSwipe_doesNotAnimateAway() {
+        Consumer<Boolean> listener = mock(BooleanConsumer.class);
+        ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
+        when(row.getHeadsUpRemovalReason()).thenReturn(HeadsUpRemovalReason.SWIPE_UP);
+        prepareStackScrollerForHunAnimations(listener);
+
+        mStackScroller.generateHeadsUpAnimation(
+                row, /* isHeadsUp= */ false, /* statusBarChipBounds= */ null);
+
+        verify(row, never()).setHeadsUpAnimatingAway(true);
+        verify(listener, never()).accept(true);
+        assertFalse(mStackScroller.mHeadsUpAnimatingAway);
     }
 
     @Test

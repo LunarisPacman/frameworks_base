@@ -382,7 +382,7 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         val headsUpEntry = underTest.HeadsUpEntry(notifEntry)
         headsUpEntry.setRowPinnedStatus(PinnedStatus.NotPinned)
 
-        underTest.onEntryRemoved(headsUpEntry, /* timedOut= */ false)
+        underTest.onEntryRemoved(headsUpEntry, HeadsUpRemovalReason.DEFAULT)
 
         verify(headsUpManagerLogger, times(1)).logNotificationActuallyRemoved(eq(notifEntry))
     }
@@ -413,7 +413,7 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         )
 
         assertThat(underTest.isHeadsUpEntry(entry.key)).isFalse()
-        assertThat(row.didHeadsUpTimeOut()).isTrue()
+        assertThat(row.headsUpRemovalReason).isEqualTo(HeadsUpRemovalReason.TIMEOUT)
     }
 
     @Test
@@ -439,7 +439,7 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
         )
 
         assertThat(underTest.isHeadsUpEntry(entry.key)).isFalse()
-        assertThat(row.didHeadsUpTimeOut()).isFalse()
+        assertThat(row.headsUpRemovalReason).isEqualTo(HeadsUpRemovalReason.DEFAULT)
     }
 
     @Test
@@ -534,11 +534,17 @@ class HeadsUpManagerImplTest(flags: FlagsParameterization) : SysuiTestCase() {
     @Test
     fun testSnooze_notPinnedByUser() {
         val entry = HeadsUpManagerTestUtil.createEntry(/* id= */ 0, mContext)
+        val row = kosmos.createRow()
+        entry.row = row
         underTest.showNotification(entry, isPinnedByUser = false)
 
+        underTest.unpinAll(true)
         underTest.snooze()
+        underTest.onExpandingFinished()
 
         assertThat(underTest.isSnoozed(entry.sbn.packageName)).isTrue()
+        assertThat(underTest.isHeadsUpEntry(entry.key)).isFalse()
+        assertThat(row.headsUpRemovalReason).isEqualTo(HeadsUpRemovalReason.SWIPE_UP)
     }
 
     @Test
